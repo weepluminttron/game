@@ -8,6 +8,9 @@ import * as THREE from "three";
     tracking: { name: "跟踪", count: 1, color: 0x4fc3ff, scorePerKill: 25, respawnDelay: 350 },
     gridshot: { name: "极速切换", count: 1, color: 0xffc24d, scorePerKill: 15, respawnDelay: 200 }
   };
+  // 无畏契约的灵敏度换算：1 个鼠标计数 = 0.07 度
+  const VALORANT_DEG_PER_COUNT = 0.07;
+  const RAD_PER_PIXEL = VALORANT_DEG_PER_COUNT * Math.PI / 180;
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -171,7 +174,8 @@ import * as THREE from "three";
   function randomTargetPos() {
     for (let i = 0; i < 24; i++) {
       const yawA = (Math.random() * 2 - 1) * Math.PI;
-      const pitchA = (Math.random() * 2 - 1) * 0.55;
+      // 保证靶子不会刷到地面以下：俯角最低约 -0.08 弧度
+      const pitchA = -0.08 + Math.random() * 0.6;
       const dist = 9.5 + Math.random() * 3;
       const dir = new THREE.Vector3(
         -Math.sin(yawA) * Math.cos(pitchA),
@@ -197,7 +201,7 @@ import * as THREE from "three";
   function spawnTarget(t) {
     if (mode === "tracking") {
       t.angY = (Math.random() * 2 - 1) * 1.2;
-      t.angP = (Math.random() * 2 - 1) * 0.6;
+      t.angP = -0.08 + Math.random() * 0.7;
       t.vy = (0.35 + Math.random() * 0.5) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.vp = (0.25 + Math.random() * 0.35) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.hp = 100;
@@ -336,9 +340,9 @@ import * as THREE from "three";
     t.angY += t.vy * dt;
     t.angP += t.vp * dt;
     if (t.angY > 1.35 || t.angY < -1.35) t.vy *= -1;
-    if (t.angP > 0.75 || t.angP < -0.75) t.vp *= -1;
+    if (t.angP > 0.65 || t.angP < -0.1) t.vp *= -1;
     t.angY = Math.max(-1.35, Math.min(1.35, t.angY));
-    t.angP = Math.max(-0.75, Math.min(0.75, t.angP));
+    t.angP = Math.max(-0.1, Math.min(0.65, t.angP));
     placeTrackingTarget(t);
 
     if (mouseDown) {
@@ -435,8 +439,8 @@ import * as THREE from "three";
 
   document.addEventListener("mousemove", (e) => {
     if (!locked || !running || paused) return;
-    yaw -= e.movementX * 0.0023 * sens;
-    pitch -= e.movementY * 0.0023 * sens;
+    yaw -= e.movementX * RAD_PER_PIXEL * sens;
+    pitch -= e.movementY * RAD_PER_PIXEL * sens;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
   });
 
