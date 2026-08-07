@@ -631,12 +631,11 @@ import * as THREE from "three";
       updateParticles(dt);
     }
 
-    // 指数插值平滑（Lerp）：越接近目标越柔和；单帧仍保留安全上限，杜绝跳变
+    // 线性限速跟随：小幅移动即时到位（跟手），大幅甩动按单帧上限平滑追，防跳变
     if (running && !paused) {
-      const factor = 1 - Math.exp(-14 * dt);
-      const maxStep = 0.12;
-      yaw += Math.max(-maxStep, Math.min(maxStep, (targetYaw - yaw) * factor));
-      pitch += Math.max(-maxStep, Math.min(maxStep, (targetPitch - pitch) * factor));
+      const maxTurn = Math.min(0.18, 12 * dt);
+      yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
+      pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
     }
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
