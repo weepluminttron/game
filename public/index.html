@@ -76,13 +76,19 @@
             <option value="all">多面（环绕）</option>
           </select>
         </label>
+        <label>视角控制
+          <select id="set-control">
+            <option value="drag" selected>拖拽（按住右键转动）</option>
+            <option value="lock">锁定（点击锁定鼠标）</option>
+          </select>
+        </label>
         <label>灵敏度（无畏契约）
           <input type="range" id="set-sens" min="0.05" max="10" step="0.05" value="1">
           <input type="number" id="set-sens-input" min="0.05" max="10" step="0.01" value="1">
         </label>
       </div>
       <button id="start-btn">开始训练</button>
-      <p class="hint">点击画面锁定鼠标 · 移动瞄准 · 左键射击 · Esc 暂停</p>
+      <p class="hint">拖拽模式：按住右键转动视角，左键射击<br>锁定模式：点击画面锁定鼠标，Esc 暂停</p>
     </div>
   </div>
 

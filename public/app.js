@@ -11,7 +11,7 @@ import * as THREE from "three";
   // 无畏契约的灵敏度换算：1 个鼠标计数 = 0.07 度
   const VALORANT_DEG_PER_COUNT = 0.07;
   const RAD_PER_PIXEL = VALORANT_DEG_PER_COUNT * Math.PI / 180;
-  const PITCH_LIMIT = 1.45;
+  const PITCH_LIMIT = 1.4; // 约 80 度，防止镜头翻转
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -132,7 +132,9 @@ import * as THREE from "three";
   let hits = 0;
   let score = 0;
   let mouseDown = false;
+  let dragging = false;
   let locked = false;
+  let controlMode = "drag";
   let yaw = 0;
   let pitch = 0;
   let targetYaw = 0;
@@ -263,6 +265,7 @@ import * as THREE from "three";
     sizeMult = Number($("set-size").value);
     speedMult = Number($("set-speed").value);
     spawnSide = $("set-side").value;
+    controlMode = $("set-control").value;
 
     for (const t of targets) scene.remove(t.group);
     targets = [];
@@ -286,7 +289,8 @@ import * as THREE from "three";
     ui.hud.classList.remove("hidden");
     ui.modeLabel.textContent = cfg.name;
     updateHud();
-    canvas.requestPointerLock();
+    if (controlMode === "lock") canvas.requestPointerLock();
+    ui.pause.classList.add("hidden");
     playStart();
   }
 
@@ -446,13 +450,14 @@ import * as THREE from "three";
 
   // ---------- 输入 ----------
   canvas.addEventListener("click", () => {
-    if (running && !finished && document.pointerLockElement !== canvas) {
+    if (controlMode === "lock" && running && !finished && document.pointerLockElement !== canvas) {
       canvas.requestPointerLock();
     }
     ensureAudio();
   });
 
   document.addEventListener("pointerlockchange", () => {
+    if (controlMode !== "lock") return;
     locked = document.pointerLockElement === canvas;
     if (locked) {
       skipMoveUntil = performance.now() + 80;
@@ -470,25 +475,35 @@ import * as THREE from "three";
   });
 
   document.addEventListener("mousemove", (e) => {
-    if (!locked || !running || paused) return;
-    if (performance.now() < skipMoveUntil) return;
+    if (!running || paused) return;
+    if (controlMode === "lock") {
+      if (!locked) return;
+      if (performance.now() < skipMoveUntil) return;
+    } else if (!dragging) {
+      return;
+    }
     const dx = e.movementX;
     const dy = e.movementY;
-    // 位移只累计到目标角度，由主循环限速平滑追过去；
-    // 不丢弃大位移，否则 Edge 把快速甩动打包成一次事件时会整段丢失输入
+    // 位移只累计到目标角度，由主循环插值平滑追过去，不直接改当前角度
     targetYaw -= dx * RAD_PER_PIXEL * sens;
     targetPitch -= dy * RAD_PER_PIXEL * sens;
     targetPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, targetPitch));
   });
 
   canvas.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    mouseDown = true;
-    if (locked && running && !paused && mode !== "tracking") fire();
+    if (e.button === 2 && controlMode === "drag") {
+      dragging = true;
+      return;
+    }
+    if (e.button === 0) {
+      mouseDown = true;
+      if ((locked || controlMode === "drag") && running && !paused && mode !== "tracking") fire();
+    }
   });
 
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) mouseDown = false;
+    if (e.button === 2) dragging = false;
   });
 
   document.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -616,11 +631,12 @@ import * as THREE from "three";
       updateParticles(dt);
     }
 
-    // 每帧向目标角度平滑靠近：按时间限速，且单帧最多转约 7 度
+    // 指数插值平滑（Lerp）：越接近目标越柔和；单帧仍保留安全上限，杜绝跳变
     if (running && !paused) {
-      const maxTurn = Math.min(0.12, 8 * dt);
-      yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
-      pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
+      const factor = 1 - Math.exp(-14 * dt);
+      const maxStep = 0.12;
+      yaw += Math.max(-maxStep, Math.min(maxStep, (targetYaw - yaw) * factor));
+      pitch += Math.max(-maxStep, Math.min(maxStep, (targetPitch - pitch) * factor));
     }
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
