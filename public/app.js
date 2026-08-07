@@ -9,6 +9,12 @@ import * as THREE from "three";
     gridshot: { name: "极速切换", count: 1, color: 0xffc24d, scorePerKill: 15, respawnDelay: 200 }
   };
   // 无畏契约的灵敏度换算：1 个鼠标计数 = 0.07 度
+  // 视角平滑预设：[单帧角度上限, 最大角速度(弧度/秒)]
+  const SMOOTH_PRESETS = {
+    responsive: { step: 0.25, vel: 16 },
+    balanced: { step: 0.1, vel: 8 },
+    stable: { step: 0.05, vel: 4 }
+  };
   const VALORANT_DEG_PER_COUNT = 0.07;
   const RAD_PER_PIXEL = VALORANT_DEG_PER_COUNT * Math.PI / 180;
   const PITCH_LIMIT = 1.4; // 约 80 度，防止镜头翻转
@@ -135,6 +141,7 @@ import * as THREE from "three";
   let dragging = false;
   let locked = false;
   let controlMode = "lock";
+  let smoothingMode = "balanced";
   let yaw = 0;
   let pitch = 0;
   let targetYaw = 0;
@@ -142,6 +149,7 @@ import * as THREE from "three";
   let sens = 1;
   let spawnSide = "front";
   let skipMoveUntil = 0;
+  let firstMoveAfterLock = true;
   let lastNow = performance.now();
   let startReal = 0;
   let hitmarkerAt = 0;
@@ -266,6 +274,7 @@ import * as THREE from "three";
     speedMult = Number($("set-speed").value);
     spawnSide = $("set-side").value;
     controlMode = $("set-control").value;
+    smoothingMode = $("set-smooth").value;
 
     for (const t of targets) scene.remove(t.group);
     targets = [];
@@ -460,7 +469,8 @@ import * as THREE from "three";
     if (controlMode !== "lock") return;
     locked = document.pointerLockElement === canvas;
     if (locked) {
-      skipMoveUntil = performance.now() + 80;
+      skipMoveUntil = performance.now() + 120;
+      firstMoveAfterLock = true;
       targetYaw = yaw;
       targetPitch = pitch;
     }
@@ -476,14 +486,18 @@ import * as THREE from "three";
 
   document.addEventListener("mousemove", (e) => {
     if (!running || paused) return;
+    const dx = e.movementX;
+    const dy = e.movementY;
     if (controlMode === "lock") {
       if (!locked) return;
       if (performance.now() < skipMoveUntil) return;
+      if (firstMoveAfterLock) {
+        firstMoveAfterLock = false;
+        if (Math.abs(dx) > 120 || Math.abs(dy) > 120) return;
+      }
     } else if (!dragging) {
       return;
     }
-    const dx = e.movementX;
-    const dy = e.movementY;
     // 位移只累计到目标角度，由主循环插值平滑追过去，不直接改当前角度
     targetYaw -= dx * RAD_PER_PIXEL * sens;
     targetPitch -= dy * RAD_PER_PIXEL * sens;
@@ -633,7 +647,8 @@ import * as THREE from "three";
 
     // 线性限速跟随：小幅移动即时到位（跟手），大幅甩动按单帧上限平滑追，防跳变
     if (running && !paused) {
-      const maxTurn = Math.min(0.18, 12 * dt);
+      const preset = SMOOTH_PRESETS[smoothingMode] || SMOOTH_PRESETS.balanced;
+      const maxTurn = Math.min(preset.step, preset.vel * dt);
       yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
       pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
     }
