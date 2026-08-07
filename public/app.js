@@ -84,6 +84,7 @@ import * as THREE from "three";
   scene.add(floor);
 
   const blockers = [];
+  blockers.push(floor);
   function addBox(w, h, d, x, y, z, material) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z);
@@ -177,21 +178,26 @@ import * as THREE from "three";
 
   function randomTargetPos() {
     for (let i = 0; i < 24; i++) {
-      const yawA = spawnSide === "front"
-        ? yaw + (Math.random() * 2 - 1) * 1.3
+      // 以玩家当前视线方向为基准生成，球不会出现在背后、脚下或相机内部
+      const worldYaw = spawnSide === "front"
+        ? yaw + (Math.random() * 2 - 1) * 1.2
         : (Math.random() * 2 - 1) * Math.PI;
-      // 保证靶子不会刷到地面以下：俯角最低约 -0.08 弧度
-      const pitchA = -0.08 + Math.random() * 0.6;
-      const dist = 9.5 + Math.random() * 3;
+      const worldPitch = Math.max(-0.1, Math.min(0.8, pitch + (Math.random() * 2 - 1) * 0.35));
       const dir = new THREE.Vector3(
-        -Math.sin(yawA) * Math.cos(pitchA),
-        Math.sin(pitchA),
-        -Math.cos(yawA) * Math.cos(pitchA)
+        -Math.sin(worldYaw) * Math.cos(worldPitch),
+        Math.sin(worldPitch),
+        -Math.cos(worldYaw) * Math.cos(worldPitch)
       );
-      const pos = camera.position.clone().addScaledVector(dir, dist);
+      // 生成距离 3~10 米；如果前方有墙或柱子，就把球放到障碍物前面
+      const dist = 6.5 + Math.random() * 3.5;
       const ray = new THREE.Raycaster(camera.position, dir);
       const hits = ray.intersectObjects(blockers, false);
-      if (hits.length && hits[0].distance < dist - 0.8) continue;
+      let targetDist = dist;
+      if (hits.length && hits[0].distance < dist - 0.6) {
+        targetDist = Math.max(3, hits[0].distance - 0.6);
+      }
+      const pos = camera.position.clone().addScaledVector(dir, targetDist);
+      pos.y = Math.max(pos.y, 0.7);
       let ok = true;
       for (const t of targets) {
         if (t.alive && t.group.position.distanceTo(pos) < 3) {
@@ -208,10 +214,10 @@ import * as THREE from "three";
     if (mode === "tracking") {
       t.angY = spawnSide === "front"
         ? yaw + (Math.random() * 2 - 1) * 1.0
-        : (Math.random() * 2 - 1) * 1.2;
-      t.angYMin = spawnSide === "front" ? yaw - 1.3 : -1.35;
-      t.angYMax = spawnSide === "front" ? yaw + 1.3 : 1.35;
-      t.angP = -0.08 + Math.random() * 0.7;
+        : (Math.random() * 2 - 1) * Math.PI;
+      t.angYMin = spawnSide === "front" ? yaw - 1.3 : -Math.PI;
+      t.angYMax = spawnSide === "front" ? yaw + 1.3 : Math.PI;
+      t.angP = Math.max(-0.1, Math.min(0.7, pitch + (Math.random() * 2 - 1) * 0.4));
       t.vy = (0.35 + Math.random() * 0.5) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.vp = (0.25 + Math.random() * 0.35) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.hp = 100;
@@ -234,7 +240,15 @@ import * as THREE from "three";
       Math.sin(t.angP),
       -Math.cos(t.angY) * Math.cos(t.angP)
     );
-    t.group.position.copy(camera.position).addScaledVector(dir, 10);
+    const ray = new THREE.Raycaster(camera.position, dir);
+    const hits = ray.intersectObjects(blockers, false);
+    let dist = 10;
+    if (hits.length && hits[0].distance < dist - 0.6) {
+      dist = Math.max(3, hits[0].distance - 0.6);
+    }
+    const pos = camera.position.clone().addScaledVector(dir, dist);
+    pos.y = Math.max(pos.y, 0.7);
+    t.group.position.copy(pos);
   }
 
   function startRound() {
@@ -451,8 +465,12 @@ import * as THREE from "three";
   document.addEventListener("mousemove", (e) => {
     if (!locked || !running || paused) return;
     if (performance.now() < skipMoveUntil) return;
-    yaw -= e.movementX * RAD_PER_PIXEL * sens;
-    pitch -= e.movementY * RAD_PER_PIXEL * sens;
+    const dx = e.movementX;
+    const dy = e.movementY;
+    // 忽略锁定鼠标瞬间的超大幽灵位移，避免画面突然甩动
+    if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
+    yaw -= dx * RAD_PER_PIXEL * sens;
+    pitch -= dy * RAD_PER_PIXEL * sens;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
   });
 
