@@ -134,7 +134,7 @@ import * as THREE from "three";
   let mouseDown = false;
   let dragging = false;
   let locked = false;
-  let controlMode = "drag";
+  let controlMode = "lock";
   let yaw = 0;
   let pitch = 0;
   let targetYaw = 0;
