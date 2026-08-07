@@ -616,9 +616,9 @@ import * as THREE from "three";
       updateParticles(dt);
     }
 
-    // 每帧向目标角度平滑靠近：按时间限速，且单帧最多转约 17 度
+    // 每帧向目标角度平滑靠近：按时间限速，且单帧最多转约 7 度
     if (running && !paused) {
-      const maxTurn = Math.min(0.3, 16 * dt);
+      const maxTurn = Math.min(0.12, 8 * dt);
       yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
       pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
     }
