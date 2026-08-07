@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIM TRAINER · 练枪训练器</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hud-top">
+      <div id="timer">60.0</div>
+      <div id="score">0</div>
+    </div>
+    <div id="hud-stats">
+      <span>命中率 <b id="stat-acc">0%</b></span>
+      <span>击杀 <b id="stat-kills">0</b></span>
+      <span>射击 <b id="stat-shots">0</b></span>
+    </div>
+    <div id="mode-label"></div>
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+  </div>
+
+  <div id="menu">
+    <div class="panel">
+      <h1>AIM TRAINER</h1>
+      <p class="sub">类似 Aim Lab 的网页练枪训练器</p>
+      <div class="section-title">选择模式</div>
+      <div id="modes">
+        <button class="mode-card active" data-mode="sixshot">
+          <b>六目标</b><span>六个静止靶，逐个击破</span>
+        </button>
+        <button class="mode-card" data-mode="tracking">
+          <b>跟踪</b><span>持续射击移动靶</span>
+        </button>
+        <button class="mode-card" data-mode="gridshot">
+          <b>极速切换</b><span>击中一个，下一个立刻刷新</span>
+        </button>
+      </div>
+      <div class="section-title">训练设置</div>
+      <div id="settings">
+        <label>时长
+          <select id="set-duration">
+            <option value="30">30 秒</option>
+            <option value="60" selected>60 秒</option>
+            <option value="120">120 秒</option>
+          </select>
+        </label>
+        <label>靶子大小
+          <select id="set-size">
+            <option value="0.7">小</option>
+            <option value="1" selected>中</option>
+            <option value="1.4">大</option>
+          </select>
+        </label>
+        <label>移动速度
+          <select id="set-speed">
+            <option value="0.6">慢</option>
+            <option value="1" selected>中</option>
+            <option value="1.6">快</option>
+          </select>
+        </label>
+        <label>鼠标灵敏度
+          <input type="range" id="set-sens" min="0.4" max="3" step="0.1" value="1">
+          <span id="sens-value">1.0</span>
+        </label>
+      </div>
+      <button id="start-btn">开始训练</button>
+      <p class="hint">点击画面锁定鼠标 · 移动瞄准 · 左键射击 · Esc 暂停</p>
+    </div>
+  </div>
+
+  <div id="pause" class="hidden">
+    <div class="small-panel"><b>已暂停</b><span>点击任意处继续</span></div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="panel">
+      <h2>训练完成</h2>
+      <div id="res-newbest" class="hidden">🎉 新纪录！</div>
+      <div id="result-stats">
+        <div><span>得分</span><b id="res-score">0</b></div>
+        <div><span>击杀</span><b id="res-kills">0</b></div>
+        <div><span>命中率</span><b id="res-acc">0%</b></div>
+        <div><span>平均每杀</span><b id="res-avg">—</b></div>
+        <div><span>最佳成绩</span><b id="res-best">0</b></div>
+      </div>
+      <div class="result-actions">
+        <button id="again-btn">再来一次</button>
+        <button id="menu-btn">返回菜单</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

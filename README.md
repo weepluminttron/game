@@ -1,0 +1,85 @@
+# Aim Trainer · 网页练枪训练器
+
+一个类似 Aim Lab 的浏览器练枪程序：3D 训练场、鼠标瞄准、三种练习模式、实时数据统计，部署到云服务器后打开网址就能练。
+
+## 功能
+
+- 三种模式：
+  - **六目标**：六个静止靶，逐个击破，练快速定位
+  - **跟踪**：移动靶持续输出，练跟枪
+  - **极速切换**：击中一个立刻刷新下一个，练目标切换
+- 可调训练时长（30 / 60 / 120 秒）、靶子大小、移动速度、鼠标灵敏度
+- 实时统计：得分、击杀、命中率、射击次数
+- 结束后显示平均每杀用时，并自动保存每个模式的最佳成绩（浏览器本地）
+- 命中粒子特效、命中标记、音效反馈
+- 暂停/继续（Esc 暂停，点击继续）
+
+## 运行
+
+需要 Node.js 18 或更高版本：
+
+```bash
+npm install
+npm start
+```
+
+浏览器打开 `http://localhost:3000` 即可开始。
+
+## 操作
+
+- 点击画面锁定鼠标
+- 移动鼠标瞄准
+- 左键射击
+- Esc 暂停
+
+## 云服务器部署
+
+### Docker
+
+```bash
+docker build -t aim-trainer .
+docker run -d --name aim-trainer -p 3000:3000 --restart unless-stopped aim-trainer
+```
+
+然后在云服务商控制台的「安全组 / 防火墙」放行 3000 端口，玩家访问 `http://服务器公网IP:3000`。
+
+### 直接运行 Node
+
+```bash
+npm install
+npm start
+```
+
+建议配合 pm2 守护进程：
+
+```bash
+npm install -g pm2
+pm2 start server.js --name aim-trainer
+pm2 save
+pm2 startup
+```
+
+端口可通过环境变量修改：`PORT=8080 npm start`。
+
+## 目录结构
+
+```text
+.
+├── server.js        # 零依赖静态文件服务器
+├── public/
+│   ├── index.html   # 页面入口
+│   ├── style.css    # 界面样式
+│   └── app.js       # 3D 练枪逻辑
+└── Dockerfile       # 云服务器部署用
+```
+
+## 后续可以扩展的方向
+
+- 更多模式：蜘蛛射击、微调、反应测试
+- 历史成绩图表与曲线
+- 自定义靶场主题 / 靶子外观
+- 账号系统与在线排行
+
+## 声明
+
+本项目是学习用途的练枪工具，与 Aim Lab（State Space Labs）无关。

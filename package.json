@@ -1,0 +1,18 @@
+{
+  "name": "aim-trainer",
+  "version": "1.0.0",
+  "description": "类似 Aim Lab 的网页练枪训练器：六目标、跟踪、极速切换三种模式",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.165.0"
+  }
+}
