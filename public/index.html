@@ -96,6 +96,28 @@
       </div>
       <button id="start-btn">开始训练</button>
       <p class="hint">点击画面锁定鼠标 · 移动瞄准 · 左键射击 · Esc 暂停<br>可选拖拽模式：按住右键转动视角</p>
+      <div id="admin-area">
+        <button id="admin-btn" class="admin-btn">管理员</button>
+        <div id="admin-login" class="hidden">
+          <input type="password" id="admin-pass" placeholder="管理员密码" autocomplete="off">
+          <button id="admin-ok">确认</button>
+          <span id="admin-msg"></span>
+        </div>
+        <div id="admin-panel" class="hidden">
+          <div class="section-title">辅助功能（管理员）</div>
+          <label class="toggle-row"><input type="checkbox" id="set-triggerbot"> 自动开枪（扳机）</label>
+          <label class="toggle-row"><input type="checkbox" id="set-assist"> 瞄准辅助（吸附）</label>
+          <label>辅助范围
+            <input type="range" id="set-assist-fov" min="5" max="30" step="1" value="12">
+            <span id="fov-value">12°</span>
+          </label>
+          <label>辅助强度
+            <input type="range" id="set-assist-strength" min="0.1" max="0.8" step="0.05" value="0.4">
+            <span id="strength-value">40%</span>
+          </label>
+          <button id="admin-exit" class="admin-btn">退出管理员</button>
+        </div>
+      </div>
     </div>
   </div>
 

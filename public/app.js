@@ -18,6 +18,7 @@ import * as THREE from "three";
   const VALORANT_DEG_PER_COUNT = 0.07;
   const RAD_PER_PIXEL = VALORANT_DEG_PER_COUNT * Math.PI / 180;
   const PITCH_LIMIT = 1.4; // 约 80 度，防止镜头翻转
+  const ADMIN_PASS_HASH = "3bacef24";
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -38,7 +39,20 @@ import * as THREE from "three";
     resAvg: $("res-avg"),
     resBest: $("res-best"),
     resNewBest: $("res-newbest"),
-    sensInput: $("set-sens-input")
+    sensInput: $("set-sens-input"),
+    adminBtn: $("admin-btn"),
+    adminLogin: $("admin-login"),
+    adminPass: $("admin-pass"),
+    adminOk: $("admin-ok"),
+    adminMsg: $("admin-msg"),
+    adminPanel: $("admin-panel"),
+    adminExit: $("admin-exit"),
+    setTriggerbot: $("set-triggerbot"),
+    setAssist: $("set-assist"),
+    setAssistFov: $("set-assist-fov"),
+    setAssistStrength: $("set-assist-strength"),
+    fovValue: $("fov-value"),
+    strengthValue: $("strength-value")
   };
 
   // ---------- 渲染环境 ----------
@@ -142,6 +156,12 @@ import * as THREE from "three";
   let locked = false;
   let controlMode = "lock";
   let smoothingMode = "balanced";
+  let adminUnlocked = false;
+  let triggerbot = false;
+  let assist = false;
+  let assistFov = 12 * Math.PI / 180;
+  let assistStrength = 0.4;
+  let lastAutoFire = 0;
   let yaw = 0;
   let pitch = 0;
   let targetYaw = 0;
@@ -344,6 +364,28 @@ import * as THREE from "three";
     return null;
   }
 
+  // 瞄准辅助：把目标角度向视野范围内的最近靶子轻微吸附
+  function updateAssist(dt) {
+    if (!assist) return;
+    let best = null;
+    for (const t of targets) {
+      if (!t.alive) continue;
+      const dir = new THREE.Vector3().subVectors(t.group.position, camera.position).normalize();
+      const targetYawAngle = Math.atan2(-dir.x, -dir.z);
+      const targetPitchAngle = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+      let dy = targetYawAngle - yaw;
+      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      const dp = targetPitchAngle - pitch;
+      const d = Math.hypot(dy, dp);
+      if (d <= assistFov && (!best || d < best.d)) best = { d, dy, dp };
+    }
+    if (!best) return;
+    const pull = assistStrength * Math.min(1, 10 * dt);
+    targetYaw += best.dy * pull;
+    targetPitch += best.dp * pull;
+    targetPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, targetPitch));
+  }
+
   function fire() {
     if (!running || paused) return;
     shots++;
@@ -385,10 +427,12 @@ import * as THREE from "three";
     t.angP = Math.max(-0.1, Math.min(0.65, t.angP));
     placeTrackingTarget(t);
 
-    if (mouseDown) {
+    const hit = castRay();
+    const onTarget = !!hit && hitTargetOf(hit.object) === t;
+    const holding = mouseDown || (triggerbot && onTarget);
+    if (holding) {
       shots += dt;
-      const hit = castRay();
-      if (hit && hitTargetOf(hit.object) === t) {
+      if (onTarget) {
         hits += dt;
         t.hp -= 120 * dt;
         if (performance.now() - hitmarkerAt > 140) {
@@ -539,6 +583,81 @@ import * as THREE from "three";
     ui.results.classList.add("hidden");
     ui.menu.classList.remove("hidden");
   });
+
+  // ---------- 管理员模式 ----------
+  function hashStr(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+    return (h >>> 0).toString(16);
+  }
+
+  function loadAdminSettings() {
+    triggerbot = localStorage.getItem("aimtrainer-triggerbot") === "1";
+    assist = localStorage.getItem("aimtrainer-assist") === "1";
+    assistFov = (Number(localStorage.getItem("aimtrainer-assist-fov")) || 12) * Math.PI / 180;
+    assistStrength = Number(localStorage.getItem("aimtrainer-assist-strength")) || 0.4;
+    ui.setTriggerbot.checked = triggerbot;
+    ui.setAssist.checked = assist;
+    ui.setAssistFov.value = Math.round(assistFov * 180 / Math.PI);
+    ui.setAssistStrength.value = assistStrength;
+    ui.fovValue.textContent = Math.round(assistFov * 180 / Math.PI) + "°";
+    ui.strengthValue.textContent = Math.round(assistStrength * 100) + "%";
+    if (sessionStorage.getItem("aimtrainer-admin") === "1") {
+      adminUnlocked = true;
+      ui.adminLogin.classList.add("hidden");
+      ui.adminPanel.classList.remove("hidden");
+    }
+  }
+
+  function checkAdminPass() {
+    if (hashStr(ui.adminPass.value) === ADMIN_PASS_HASH) {
+      adminUnlocked = true;
+      sessionStorage.setItem("aimtrainer-admin", "1");
+      ui.adminMsg.textContent = "";
+      ui.adminLogin.classList.add("hidden");
+      ui.adminPanel.classList.remove("hidden");
+      ui.adminPass.value = "";
+    } else {
+      ui.adminMsg.textContent = "密码错误";
+    }
+  }
+
+  ui.adminBtn.addEventListener("click", () => {
+    if (adminUnlocked) {
+      ui.adminPanel.classList.remove("hidden");
+    } else {
+      ui.adminLogin.classList.toggle("hidden");
+    }
+  });
+  ui.adminOk.addEventListener("click", checkAdminPass);
+  ui.adminPass.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkAdminPass();
+  });
+  ui.adminExit.addEventListener("click", () => {
+    adminUnlocked = false;
+    sessionStorage.removeItem("aimtrainer-admin");
+    ui.adminPanel.classList.add("hidden");
+  });
+  ui.setTriggerbot.addEventListener("change", (e) => {
+    triggerbot = e.target.checked;
+    localStorage.setItem("aimtrainer-triggerbot", triggerbot ? "1" : "0");
+  });
+  ui.setAssist.addEventListener("change", (e) => {
+    assist = e.target.checked;
+    localStorage.setItem("aimtrainer-assist", assist ? "1" : "0");
+  });
+  ui.setAssistFov.addEventListener("input", (e) => {
+    assistFov = Number(e.target.value) * Math.PI / 180;
+    ui.fovValue.textContent = e.target.value + "°";
+    localStorage.setItem("aimtrainer-assist-fov", e.target.value);
+  });
+  ui.setAssistStrength.addEventListener("input", (e) => {
+    assistStrength = Number(e.target.value);
+    ui.strengthValue.textContent = Math.round(assistStrength * 100) + "%";
+    localStorage.setItem("aimtrainer-assist-strength", e.target.value);
+  });
+  loadAdminSettings();
+
   function applySens(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n <= 0) return;
@@ -632,11 +751,22 @@ import * as THREE from "three";
     if (running && !paused) {
       timeLeft -= dt;
       if (mode === "tracking") updateTracking(dt);
+      // 触发扳机：准星压到靶子上时自动开枪
+      if (triggerbot && mode !== "tracking") {
+        if (now - lastAutoFire > 200 && (controlMode !== "lock" || locked)) {
+          const hit = castRay();
+          if (hit && hitTargetOf(hit.object)) {
+            lastAutoFire = now;
+            fire();
+          }
+        }
+      }
       for (const t of targets) {
         if (!t.alive && now >= t.respawnAt) spawnTarget(t);
       }
       updateParticles(dt);
       updateHud();
+      updateAssist(dt);
       if (timeLeft <= 0) {
         timeLeft = 0;
         endRound();

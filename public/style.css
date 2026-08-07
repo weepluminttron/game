@@ -190,6 +190,105 @@ input[type="number"] {
   line-height: 1.8;
 }
 
+/* ---------- 管理员 ---------- */
+#admin-area {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.admin-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.admin-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+#admin-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+#admin-pass {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+  font-size: 14px;
+}
+
+#admin-ok {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+#admin-msg {
+  width: 100%;
+  color: #ff7b6e;
+  font-size: 12px;
+  min-height: 14px;
+}
+
+#admin-panel {
+  margin-top: 12px;
+}
+
+#admin-panel .section-title {
+  margin-top: 0;
+}
+
+#admin-panel label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.toggle-row {
+  justify-content: flex-start !important;
+}
+
+.toggle-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff6b5e;
+}
+
+#admin-panel input[type="range"] {
+  flex: 1;
+}
+
+#admin-panel .admin-btn {
+  width: 100%;
+  margin-top: 12px;
+}
+
 #result-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
