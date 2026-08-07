@@ -11,6 +11,7 @@ import * as THREE from "three";
   // 无畏契约的灵敏度换算：1 个鼠标计数 = 0.07 度
   const VALORANT_DEG_PER_COUNT = 0.07;
   const RAD_PER_PIXEL = VALORANT_DEG_PER_COUNT * Math.PI / 180;
+  const PITCH_LIMIT = 1.45;
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -473,12 +474,11 @@ import * as THREE from "three";
     if (performance.now() < skipMoveUntil) return;
     const dx = e.movementX;
     const dy = e.movementY;
-    // 忽略锁定鼠标瞬间的超大幽灵位移，避免画面突然甩动
-    if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
-    // 鼠标位移只累计到目标角度，由主循环限速平滑追过去，避免瞬间跳一大截
+    // 位移只累计到目标角度，由主循环限速平滑追过去；
+    // 不丢弃大位移，否则 Edge 把快速甩动打包成一次事件时会整段丢失输入
     targetYaw -= dx * RAD_PER_PIXEL * sens;
     targetPitch -= dy * RAD_PER_PIXEL * sens;
-    targetPitch = Math.max(-1.5, Math.min(1.5, targetPitch));
+    targetPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, targetPitch));
   });
 
   canvas.addEventListener("mousedown", (e) => {
@@ -616,9 +616,9 @@ import * as THREE from "three";
       updateParticles(dt);
     }
 
-    // 每帧以最大角速度向目标角度平滑靠近（约 16 弧度/秒）
+    // 每帧向目标角度平滑靠近：按时间限速，且单帧最多转约 17 度
     if (running && !paused) {
-      const maxTurn = 16 * dt;
+      const maxTurn = Math.min(0.3, 16 * dt);
       yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
       pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
     }
