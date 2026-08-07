@@ -330,6 +330,11 @@ input[type="number"] {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+/* 游戏中的 HUD 不拦截鼠标事件，避免影响瞄准与点击 */
+#hud, #hud-top, #hud-stats, #mode-label, #crosshair, #hitmarker {
+  pointer-events: none;
+}
+
 /* ---------- 准星 / 命中 ---------- */
 #crosshair {
   position: fixed;

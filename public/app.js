@@ -469,8 +469,12 @@ import * as THREE from "three";
     const dy = e.movementY;
     // 忽略锁定鼠标瞬间的超大幽灵位移，避免画面突然甩动
     if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
-    yaw -= dx * RAD_PER_PIXEL * sens;
-    pitch -= dy * RAD_PER_PIXEL * sens;
+    // 单帧旋转幅度限幅，防止任何异常输入导致画面瞬间猛转
+    const maxStep = 0.5;
+    const yawStep = Math.max(-maxStep, Math.min(maxStep, dx * RAD_PER_PIXEL * sens));
+    const pitchStep = Math.max(-maxStep, Math.min(maxStep, dy * RAD_PER_PIXEL * sens));
+    yaw -= yawStep;
+    pitch -= pitchStep;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
   });
 
