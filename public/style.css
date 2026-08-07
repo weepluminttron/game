@@ -152,11 +152,17 @@ input[type="range"] {
   accent-color: #4fc3ff;
 }
 
-#sens-value {
-  width: 34px;
-  text-align: right;
+input[type="number"] {
+  width: 74px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
   color: #4fc3ff;
   font-weight: 700;
+  text-align: center;
+  outline: none;
+  font-size: 14px;
 }
 
 #start-btn, .result-actions button {

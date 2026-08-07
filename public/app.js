@@ -31,7 +31,7 @@ import * as THREE from "three";
     resAvg: $("res-avg"),
     resBest: $("res-best"),
     resNewBest: $("res-newbest"),
-    sensValue: $("sens-value")
+    sensInput: $("set-sens-input")
   };
 
   // ---------- 渲染环境 ----------
@@ -134,6 +134,8 @@ import * as THREE from "three";
   let yaw = 0;
   let pitch = 0;
   let sens = 1;
+  let spawnSide = "front";
+  let skipMoveUntil = 0;
   let lastNow = performance.now();
   let startReal = 0;
   let hitmarkerAt = 0;
@@ -167,13 +169,17 @@ import * as THREE from "three";
       angY: 0,
       angP: 0,
       vy: 0.4,
-      vp: 0.3
+      vp: 0.3,
+      angYMin: -1.35,
+      angYMax: 1.35
     };
   }
 
   function randomTargetPos() {
     for (let i = 0; i < 24; i++) {
-      const yawA = (Math.random() * 2 - 1) * Math.PI;
+      const yawA = spawnSide === "front"
+        ? yaw + (Math.random() * 2 - 1) * 1.3
+        : (Math.random() * 2 - 1) * Math.PI;
       // 保证靶子不会刷到地面以下：俯角最低约 -0.08 弧度
       const pitchA = -0.08 + Math.random() * 0.6;
       const dist = 9.5 + Math.random() * 3;
@@ -200,7 +206,11 @@ import * as THREE from "three";
 
   function spawnTarget(t) {
     if (mode === "tracking") {
-      t.angY = (Math.random() * 2 - 1) * 1.2;
+      t.angY = spawnSide === "front"
+        ? yaw + (Math.random() * 2 - 1) * 1.0
+        : (Math.random() * 2 - 1) * 1.2;
+      t.angYMin = spawnSide === "front" ? yaw - 1.3 : -1.35;
+      t.angYMax = spawnSide === "front" ? yaw + 1.3 : 1.35;
       t.angP = -0.08 + Math.random() * 0.7;
       t.vy = (0.35 + Math.random() * 0.5) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.vp = (0.25 + Math.random() * 0.35) * speedMult * (Math.random() < 0.5 ? -1 : 1);
@@ -235,7 +245,7 @@ import * as THREE from "three";
     duration = Number($("set-duration").value);
     sizeMult = Number($("set-size").value);
     speedMult = Number($("set-speed").value);
-    sens = Number($("set-sens").value);
+    spawnSide = $("set-side").value;
 
     for (const t of targets) scene.remove(t.group);
     targets = [];
@@ -339,9 +349,9 @@ import * as THREE from "three";
     if (!t || !t.alive) return;
     t.angY += t.vy * dt;
     t.angP += t.vp * dt;
-    if (t.angY > 1.35 || t.angY < -1.35) t.vy *= -1;
+    if (t.angY > t.angYMax || t.angY < t.angYMin) t.vy *= -1;
     if (t.angP > 0.65 || t.angP < -0.1) t.vp *= -1;
-    t.angY = Math.max(-1.35, Math.min(1.35, t.angY));
+    t.angY = Math.max(t.angYMin, Math.min(t.angYMax, t.angY));
     t.angP = Math.max(-0.1, Math.min(0.65, t.angP));
     placeTrackingTarget(t);
 
@@ -427,6 +437,7 @@ import * as THREE from "three";
 
   document.addEventListener("pointerlockchange", () => {
     locked = document.pointerLockElement === canvas;
+    if (locked) skipMoveUntil = performance.now() + 80;
     if (running && !finished && !locked) {
       paused = true;
       ui.pause.classList.remove("hidden");
@@ -439,6 +450,7 @@ import * as THREE from "three";
 
   document.addEventListener("mousemove", (e) => {
     if (!locked || !running || paused) return;
+    if (performance.now() < skipMoveUntil) return;
     yaw -= e.movementX * RAD_PER_PIXEL * sens;
     pitch -= e.movementY * RAD_PER_PIXEL * sens;
     pitch = Math.max(-1.5, Math.min(1.5, pitch));
@@ -473,8 +485,19 @@ import * as THREE from "three";
     ui.results.classList.add("hidden");
     ui.menu.classList.remove("hidden");
   });
-  $("set-sens").addEventListener("input", (e) => {
-    ui.sensValue.textContent = Number(e.target.value).toFixed(1);
+  function applySens(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    const v = Math.max(0.05, Math.min(10, n));
+    sens = v;
+    $("set-sens").value = v;
+    ui.sensInput.value = v.toFixed(2);
+  }
+
+  $("set-sens").addEventListener("input", (e) => applySens(e.target.value));
+  ui.sensInput.addEventListener("input", (e) => applySens(e.target.value));
+  ui.sensInput.addEventListener("blur", () => {
+    ui.sensInput.value = sens.toFixed(2);
   });
 
   window.addEventListener("resize", () => {
