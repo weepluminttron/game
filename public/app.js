@@ -134,6 +134,8 @@ import * as THREE from "three";
   let locked = false;
   let yaw = 0;
   let pitch = 0;
+  let targetYaw = 0;
+  let targetPitch = 0;
   let sens = 1;
   let spawnSide = "front";
   let skipMoveUntil = 0;
@@ -451,7 +453,11 @@ import * as THREE from "three";
 
   document.addEventListener("pointerlockchange", () => {
     locked = document.pointerLockElement === canvas;
-    if (locked) skipMoveUntil = performance.now() + 80;
+    if (locked) {
+      skipMoveUntil = performance.now() + 80;
+      targetYaw = yaw;
+      targetPitch = pitch;
+    }
     if (running && !finished && !locked) {
       paused = true;
       ui.pause.classList.remove("hidden");
@@ -469,13 +475,10 @@ import * as THREE from "three";
     const dy = e.movementY;
     // 忽略锁定鼠标瞬间的超大幽灵位移，避免画面突然甩动
     if (Math.abs(dx) > 800 || Math.abs(dy) > 800) return;
-    // 单帧旋转幅度限幅，防止任何异常输入导致画面瞬间猛转
-    const maxStep = 0.5;
-    const yawStep = Math.max(-maxStep, Math.min(maxStep, dx * RAD_PER_PIXEL * sens));
-    const pitchStep = Math.max(-maxStep, Math.min(maxStep, dy * RAD_PER_PIXEL * sens));
-    yaw -= yawStep;
-    pitch -= pitchStep;
-    pitch = Math.max(-1.5, Math.min(1.5, pitch));
+    // 鼠标位移只累计到目标角度，由主循环限速平滑追过去，避免瞬间跳一大截
+    targetYaw -= dx * RAD_PER_PIXEL * sens;
+    targetPitch -= dy * RAD_PER_PIXEL * sens;
+    targetPitch = Math.max(-1.5, Math.min(1.5, targetPitch));
   });
 
   canvas.addEventListener("mousedown", (e) => {
@@ -613,6 +616,12 @@ import * as THREE from "three";
       updateParticles(dt);
     }
 
+    // 每帧以最大角速度向目标角度平滑靠近（约 16 弧度/秒）
+    if (running && !paused) {
+      const maxTurn = 16 * dt;
+      yaw += Math.max(-maxTurn, Math.min(maxTurn, targetYaw - yaw));
+      pitch += Math.max(-maxTurn, Math.min(maxTurn, targetPitch - pitch));
+    }
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
     renderer.render(scene, camera);
