@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.8"
+const CLIENT_VERSION := "1.0.9"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -214,7 +214,8 @@ func _setup_3d() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky_res
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.8
+	env.ambient_light_energy = 1.1
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
 	env.glow_intensity = 0.3
@@ -246,6 +247,12 @@ func _setup_3d() -> void:
 	amb.light_energy = 0.9
 	amb.omni_range = 40.0
 	add_child(amb)
+	var probe := ReflectionProbe.new()
+	probe.position = Vector3(0, 5, 0)
+	probe.extents = Vector3(28, 8, 28)
+	probe.box_projection = true
+	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	add_child(probe)
 
 	cam = Camera3D.new()
 	cam.fov = 90
@@ -303,8 +310,9 @@ func _mat(color: Color, rough: float) -> StandardMaterial3D:
 func _make_hand() -> Node3D:
 	var hand := Node3D.new()
 	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.16, 0.12, 0.22)
-	skin.roughness = 0.7
+	skin.albedo_color = Color(0.22, 0.16, 0.30)
+	skin.metallic = 0.1
+	skin.roughness = 0.55
 	var palm := MeshInstance3D.new()
 	var palm_mesh := BoxMesh.new()
 	palm_mesh.size = Vector3(0.09, 0.07, 0.12)
@@ -334,6 +342,7 @@ func _load_gun_mesh() -> Node3D:
 	if gun_scene == null:
 		return null
 	var inst: Node3D = gun_scene.instantiate()
+	_tune_gun_materials(inst)
 	# 该 FBX 导入后枪口朝 +Z（玩家方向），翻转 180° 使枪口朝正前方
 	inst.rotation_degrees = Vector3(0, 180, 0)
 	var bb := _scene_aabb(inst)
@@ -345,6 +354,25 @@ func _load_gun_mesh() -> Node3D:
 	var center := (bb.position + bb.size * 0.5) * s
 	inst.position = Vector3(0.06, -0.10, -0.18) - center
 	return inst
+
+func _tune_gun_materials(node: Node3D) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mi: MeshInstance3D = child
+			var mat: StandardMaterial3D = mi.get_active_material(0)
+			if mat == null and mi.mesh != null:
+				mat = mi.mesh.surface_get_material(0)
+			if mat is StandardMaterial3D:
+				mat.metallic = 0.6
+				mat.roughness = 0.45
+				mat.albedo_color = Color(0.55, 0.55, 0.62)
+				if mat.normal_texture == null:
+					var nt = load("res://assets/models/glock19/textures/mat0_n.png")
+					if nt is Texture2D:
+						mat.normal_enabled = true
+						mat.normal_texture = nt
+		elif child is Node3D:
+			_tune_gun_materials(child)
 
 func _scene_aabb(node: Node3D) -> AABB:
 	var bb := AABB()
