@@ -230,7 +230,8 @@ func make_target(color: Color) -> Dictionary:
 	body.add_child(col)
 	var glow := Sprite3D.new()
 	glow.texture = glow_tex
-	glow.pixel_size = 0.05
+	# 光晕大小跟随靶子尺寸（约 2 倍靶子直径）
+	glow.pixel_size = (r * 4.0) / 128.0
 	glow.modulate = Color(color.r, color.g, color.b, 0.5)
 	glow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	body.add_child(glow)
