@@ -71,6 +71,14 @@ var current_user := ""
 var auto_login := false
 var last_user := ""
 var user_names: Array = []
+var cloud_mode := false
+var cloud_url := "http://123.207.58.61:3000"
+var cloud_logged_in := false
+var cloud_pass := ""
+var http: HTTPRequest
+var pending_cloud := ""
+var pending_name := ""
+var pending_pass := ""
 var login_screen: Control
 var leaderboard_screen: Control
 var user_label: Label
@@ -83,6 +91,9 @@ var selected_user := ""
 var login_selected_label: Label
 var login_pass_input: LineEdit
 var login_msg: Label
+var cloud_mode_cb: CheckBox
+var cloud_url_input: LineEdit
+var cloud_login_btn: Button
 
 var hud: Control
 var menu: Control
@@ -118,11 +129,15 @@ func _load_accounts() -> void:
 	auto_login = bool(accounts_cfg.get_value("accounts", "auto_login", false))
 	last_user = str(accounts_cfg.get_value("accounts", "last_user", ""))
 	user_names = accounts_cfg.get_value("accounts", "names", [])
+	cloud_mode = bool(accounts_cfg.get_value("accounts", "cloud_mode", false))
+	cloud_url = str(accounts_cfg.get_value("accounts", "cloud_url", "http://123.207.58.61:3000"))
 
 func _save_accounts() -> void:
 	accounts_cfg.set_value("accounts", "names", user_names)
 	accounts_cfg.set_value("accounts", "last_user", last_user)
 	accounts_cfg.set_value("accounts", "auto_login", auto_login)
+	accounts_cfg.set_value("accounts", "cloud_mode", cloud_mode)
+	accounts_cfg.set_value("accounts", "cloud_url", cloud_url)
 	accounts_cfg.save("user://accounts.cfg")
 
 func _user_path(name: String) -> String:
@@ -594,6 +609,11 @@ func end_round() -> void:
 		hist = hist.slice(-20)
 	cfg.set_value("history", "items", hist)
 	cfg.save(_user_path(current_user))
+	if cloud_logged_in and cloud_pass != "":
+		_cloud_request("/api/score", {
+			"name": current_user, "password": cloud_pass,
+			"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg
+		})
 	res_score_label.text = str(score)
 	res_kills_label.text = str(kills)
 	res_acc_label.text = str(acc) + "%"
@@ -980,7 +1000,7 @@ func _setup_ui() -> void:
 	login_screen.add_child(login_bg)
 	var login_panel := Panel.new()
 	login_panel.position = Vector2(390, 90)
-	login_panel.size = Vector2(500, 640)
+	login_panel.size = Vector2(500, 720)
 	login_screen.add_child(login_panel)
 	_add_label(login_panel, "选择用户 / 创建用户", 26, Vector2(0, 24), Vector2(500, 40), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label(login_panel, "已有用户", 16, Vector2(40, 80), Vector2(200, 26))
@@ -1008,21 +1028,41 @@ func _setup_ui() -> void:
 	auto_login_cb.position = Vector2(40, 420)
 	auto_login_cb.toggled.connect(_on_auto_login)
 	login_panel.add_child(auto_login_cb)
-	login_selected_label = _add_label(login_panel, "已选择：", 14, Vector2(40, 500), Vector2(420, 26))
+	cloud_mode_cb = CheckBox.new()
+	cloud_mode_cb.text = "云端账号（服务器登录）"
+	cloud_mode_cb.button_pressed = cloud_mode
+	cloud_mode_cb.position = Vector2(40, 500)
+	cloud_mode_cb.toggled.connect(_on_cloud_mode)
+	login_panel.add_child(cloud_mode_cb)
+	cloud_url_input = LineEdit.new()
+	cloud_url_input.text = cloud_url
+	cloud_url_input.placeholder_text = "服务器地址"
+	cloud_url_input.position = Vector2(40, 532)
+	cloud_url_input.size = Vector2(300, 36)
+	cloud_url_input.visible = cloud_mode
+	login_panel.add_child(cloud_url_input)
+	cloud_login_btn = Button.new()
+	cloud_login_btn.text = "云端登录/注册"
+	cloud_login_btn.position = Vector2(350, 532)
+	cloud_login_btn.size = Vector2(110, 36)
+	cloud_login_btn.visible = cloud_mode
+	cloud_login_btn.pressed.connect(_cloud_login)
+	login_panel.add_child(cloud_login_btn)
+	login_selected_label = _add_label(login_panel, "已选择：", 14, Vector2(40, 576), Vector2(420, 26))
 	login_pass_input = LineEdit.new()
 	login_pass_input.placeholder_text = "输入密码"
 	login_pass_input.secret = true
-	login_pass_input.position = Vector2(40, 532)
+	login_pass_input.position = Vector2(40, 608)
 	login_pass_input.size = Vector2(300, 36)
 	login_pass_input.text_submitted.connect(_try_login)
 	login_panel.add_child(login_pass_input)
 	var login_btn := Button.new()
 	login_btn.text = "登录"
-	login_btn.position = Vector2(350, 532)
+	login_btn.position = Vector2(350, 608)
 	login_btn.size = Vector2(110, 36)
 	login_btn.pressed.connect(_try_login)
 	login_panel.add_child(login_btn)
-	login_msg = _add_label(login_panel, "", 13, Vector2(40, 576), Vector2(420, 26))
+	login_msg = _add_label(login_panel, "", 13, Vector2(40, 652), Vector2(420, 26))
 	login_msg.add_theme_color_override("font_color", Color(1.0, 0.48, 0.43))
 	_add_label(login_panel, "每个用户独立保存设置、成绩和个人数据", 13, Vector2(40, 470), Vector2(420, 30))
 
@@ -1336,6 +1376,10 @@ func _show_login() -> void:
 	login_selected_label.text = "已选择："
 	login_pass_input.text = ""
 	login_msg.text = ""
+	cloud_mode_cb.button_pressed = cloud_mode
+	cloud_url_input.text = cloud_url
+	cloud_url_input.visible = cloud_mode
+	cloud_login_btn.visible = cloud_mode
 	for child in user_list.get_children():
 		child.queue_free()
 	for name in user_names:
@@ -1403,6 +1447,84 @@ func _on_auto_login(on: bool) -> void:
 	auto_login = on
 	_save_accounts()
 
+func _on_cloud_mode(on: bool) -> void:
+	cloud_mode = on
+	cloud_url_input.visible = on
+	cloud_login_btn.visible = on
+	_save_accounts()
+
+func _cloud_request(path: String, payload: Dictionary) -> void:
+	if http == null:
+		http = HTTPRequest.new()
+		http.timeout = 10.0
+		add_child(http)
+		http.request_completed.connect(_on_cloud_response)
+	var err := http.request(cloud_url + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if err != OK:
+		login_msg.text = "无法连接服务器"
+
+func _cloud_get(path: String) -> void:
+	if http == null:
+		http = HTTPRequest.new()
+		http.timeout = 10.0
+		add_child(http)
+		http.request_completed.connect(_on_cloud_response)
+	http.request(cloud_url + path, [], HTTPClient.METHOD_GET)
+
+func _cloud_login(_text: String = "") -> void:
+	var name := new_user_input.text.strip_edges()
+	var password := login_pass_input.text
+	if name == "" or password == "":
+		login_msg.text = "请输入昵称和密码"
+		return
+	pending_name = name
+	pending_pass = password
+	pending_cloud = "login"
+	_cloud_request("/api/login", {"name": name, "password": password})
+
+func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	var text := body.get_string_from_utf8()
+	var data := {}
+	if text != "":
+		var parsed = JSON.parse_string(text)
+		if typeof(parsed) == TYPE_DICTIONARY:
+			data = parsed
+	if pending_cloud == "login":
+		if result == HTTPRequest.RESULT_SUCCESS and code == 200 and data.get("ok", false):
+			_cloud_login_ok(pending_name, pending_pass)
+		else:
+			var err := str(data.get("error", "登录失败"))
+			if err.contains("用户名或密码错误"):
+				pending_cloud = "register"
+				_cloud_request("/api/register", {"name": pending_name, "password": pending_pass})
+			else:
+				login_msg.text = err
+	elif pending_cloud == "register":
+		if result == HTTPRequest.RESULT_SUCCESS and code == 200 and data.get("ok", false):
+			_cloud_login_ok(pending_name, pending_pass)
+		else:
+			login_msg.text = str(data.get("error", "注册失败"))
+	elif pending_cloud == "leaderboard":
+		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+			_fill_cloud_leaderboard(data)
+		else:
+			login_msg.text = ""
+			for child in lb_list.get_children():
+				child.queue_free()
+			var l := Label.new()
+			l.text = "无法连接服务器"
+			l.add_theme_font_size_override("font_size", 18)
+			lb_list.add_child(l)
+	pending_cloud = ""
+
+func _cloud_login_ok(name: String, password: String) -> void:
+	cloud_logged_in = true
+	cloud_pass = password
+	if not user_names.has(name):
+		_create_user(name, password)
+	_login_as(name)
+	login_msg.text = "云端登录成功：" + name
+
 func _logout() -> void:
 	current_user = ""
 	last_user = ""
@@ -1420,6 +1542,14 @@ func _refresh_leaderboard(idx: int) -> void:
 	for child in lb_list.get_children():
 		child.queue_free()
 	var mode_key: String = [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
+	if cloud_mode and cloud_logged_in:
+		pending_cloud = "leaderboard"
+		var loading := Label.new()
+		loading.text = "加载中…"
+		loading.add_theme_font_size_override("font_size", 18)
+		lb_list.add_child(loading)
+		_cloud_get("/api/leaderboard?mode=" + mode_key)
+		return
 	var entries := []
 	for name in user_names:
 		var c := ConfigFile.new()
@@ -1437,6 +1567,23 @@ func _refresh_leaderboard(idx: int) -> void:
 	for i in mini(entries.size(), 10):
 		var l := Label.new()
 		l.text = "%d.  %s    %d 分" % [i + 1, entries[i]["name"], entries[i]["score"]]
+		l.add_theme_font_size_override("font_size", 18)
+		lb_list.add_child(l)
+
+func _fill_cloud_leaderboard(data: Dictionary) -> void:
+	for child in lb_list.get_children():
+		child.queue_free()
+	var entries: Array = data.get("entries", [])
+	if entries.is_empty():
+		var l := Label.new()
+		l.text = "暂无成绩"
+		l.add_theme_font_size_override("font_size", 18)
+		lb_list.add_child(l)
+		return
+	for i in mini(entries.size(), 10):
+		var e: Dictionary = entries[i]
+		var l := Label.new()
+		l.text = "%d.  %s    %d 分" % [i + 1, str(e.get("name", "?")), int(e.get("score", 0))]
 		l.add_theme_font_size_override("font_size", 18)
 		lb_list.add_child(l)
 
