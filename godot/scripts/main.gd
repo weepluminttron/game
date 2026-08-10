@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.6"
+const CLIENT_VERSION := "1.0.7"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -331,8 +331,8 @@ func _load_gun_mesh() -> Node3D:
 	if gun_scene == null:
 		return null
 	var inst: Node3D = gun_scene.instantiate()
-	# 该 FBX 导入后枪口已指向 -Z（正前方），不需要额外旋转
-	inst.rotation_degrees = Vector3(0, 0, 0)
+	# 该 FBX 导入后枪口朝 +Z（玩家方向），翻转 180° 使枪口朝正前方
+	inst.rotation_degrees = Vector3(0, 180, 0)
 	var bb := _scene_aabb(inst)
 	var max_dim := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
 	var s := 1.0
