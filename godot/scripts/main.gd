@@ -668,6 +668,7 @@ func _setup_ui() -> void:
 
 	var title := Label.new()
 	title.text = "AIM TRAINER"
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title.position = Vector2(0, 24)
 	title.size = Vector2(680, 60)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -677,6 +678,7 @@ func _setup_ui() -> void:
 
 	var sub := Label.new()
 	sub.text = "Godot 客户端版 · 与网页版功能对齐"
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sub.position = Vector2(0, 78)
 	sub.size = Vector2(680, 30)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -811,15 +813,18 @@ func _setup_ui() -> void:
 	dot.color = Color(0.43, 0.91, 0.65)
 	dot.position = Vector2(-3, -3)
 	dot.size = Vector2(6, 6)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ch.add_child(dot)
 	for off in [Vector2(-1, -14), Vector2(-1, 8), Vector2(-14, -1), Vector2(8, -1)]:
 		var bar := ColorRect.new()
 		bar.color = Color(0.43, 0.91, 0.65)
 		bar.position = off
 		bar.size = Vector2(2, 6) if off.x == -1 else Vector2(6, 2)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ch.add_child(bar)
 	hitmarker_a = ColorRect.new()
 	hitmarker_a.color = Color(1, 1, 1)
+	hitmarker_a.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hitmarker_a.position = Vector2(-1, -14)
 	hitmarker_a.size = Vector2(2, 28)
 	hitmarker_a.pivot_offset = Vector2(1, 14)
@@ -828,6 +833,7 @@ func _setup_ui() -> void:
 	ch.add_child(hitmarker_a)
 	hitmarker_b = ColorRect.new()
 	hitmarker_b.color = Color(1, 1, 1)
+	hitmarker_b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hitmarker_b.position = Vector2(-1, -14)
 	hitmarker_b.size = Vector2(2, 28)
 	hitmarker_b.pivot_offset = Vector2(1, 14)
@@ -906,6 +912,7 @@ var res_newbest_label: Label
 func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
 	l.text = text
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.position = pos
 	l.size = size
 	l.horizontal_alignment = align
