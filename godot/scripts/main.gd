@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.10"
+const CLIENT_VERSION := "1.0.11"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -87,6 +87,9 @@ var cloud_logged_in := false
 var cloud_pass := ""
 var cloud_best := {}
 var http: HTTPRequest
+var http_queue: Array = []
+var http_busy := false
+var http_action := ""
 var pending_cloud := ""
 var pending_name := ""
 var pending_pass := ""
@@ -129,7 +132,6 @@ func _ready() -> void:
 	_load_settings_from_cfg()
 	_setup_3d()
 	_setup_ui()
-	_update_menu_values()
 	preview_mode = OS.get_cmdline_user_args().has("--preview")
 	if not preview_mode:
 		_check_update()
@@ -196,9 +198,6 @@ func _save_config() -> void:
 	cfg.set_value("admin", "assist_strength", assist_strength)
 	cfg.set_value("admin", "unlocked", admin_unlocked)
 	cfg.save("user://settings.cfg")
-
-func best_key() -> String:
-	return "%s-%d-%s-%s-%s" % [mode, duration, str(size_mult), str(speed_mult), spawn_side]
 
 # ---------------------------------------------------------------- 3D
 func _setup_3d() -> void:
@@ -1536,9 +1535,6 @@ func _back_to_menu() -> void:
 	results.visible = false
 	menu.visible = true
 
-func _update_menu_values() -> void:
-	pass
-
 # ---------- 用户系统 ----------
 func _show_login() -> void:
 	login_screen.visible = true
@@ -1566,22 +1562,33 @@ func _on_auto_login(on: bool) -> void:
 	_save_accounts()
 
 func _cloud_request(path: String, payload: Dictionary) -> void:
-	if http == null:
-		http = HTTPRequest.new()
-		http.timeout = 10.0
-		add_child(http)
-		http.request_completed.connect(_on_cloud_response)
-	var err := http.request(cloud_url + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
-	if err != OK:
-		login_msg.text = "无法连接服务器"
+	http_queue.append({"path": path, "payload": payload, "post": true, "action": pending_cloud})
+	_http_pump()
 
 func _cloud_get(path: String) -> void:
+	http_queue.append({"path": path, "payload": {}, "post": false, "action": pending_cloud})
+	_http_pump()
+
+func _http_pump() -> void:
+	if http_busy or http_queue.is_empty():
+		return
 	if http == null:
 		http = HTTPRequest.new()
 		http.timeout = 10.0
 		add_child(http)
 		http.request_completed.connect(_on_cloud_response)
-	http.request(cloud_url + path, [], HTTPClient.METHOD_GET)
+	var item: Dictionary = http_queue.pop_front()
+	http_busy = true
+	http_action = str(item.get("action", ""))
+	var err := OK
+	if item.get("post", false):
+		err = http.request(cloud_url + str(item["path"]), ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(item["payload"]))
+	else:
+		err = http.request(cloud_url + str(item["path"]), [], HTTPClient.METHOD_GET)
+	if err != OK:
+		http_busy = false
+		login_msg.text = "无法连接服务器"
+		_http_pump()
 
 func _check_update() -> void:
 	pending_cloud = "version"
@@ -1608,7 +1615,7 @@ func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, bod
 		var parsed = JSON.parse_string(text)
 		if typeof(parsed) == TYPE_DICTIONARY:
 			data = parsed
-	if pending_cloud == "login":
+	if http_action == "login":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200 and data.get("ok", false):
 			_cloud_login_ok(pending_name, pending_pass, data)
 		else:
@@ -1618,21 +1625,21 @@ func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, bod
 				_cloud_request("/api/register", {"name": pending_name, "password": pending_pass})
 			else:
 				login_msg.text = err
-	elif pending_cloud == "register":
+	elif http_action == "register":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200 and data.get("ok", false):
 			_cloud_login_ok(pending_name, pending_pass, {})
 		else:
 			login_msg.text = str(data.get("error", "注册失败"))
-	elif pending_cloud == "score":
+	elif http_action == "score":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 			cloud_best[mode] = int(data.get("best", cloud_best.get(mode, 0)))
-	elif pending_cloud == "version":
+	elif http_action == "version":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 			var v := str(data.get("version", ""))
 			if v != "" and v != CLIENT_VERSION:
 				update_label.text = "发现新版本 v%s（当前 v%s）" % [v, CLIENT_VERSION]
 				update_btn.visible = true
-	elif pending_cloud == "leaderboard":
+	elif http_action == "leaderboard":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 			_fill_cloud_leaderboard(data)
 		else:
@@ -1643,7 +1650,8 @@ func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, bod
 			l.text = "无法连接服务器"
 			l.add_theme_font_size_override("font_size", 18)
 			lb_list.add_child(l)
-	pending_cloud = ""
+	http_busy = false
+	_http_pump()
 
 func _cloud_login_ok(user_name: String, password: String, data: Dictionary) -> void:
 	cloud_logged_in = true
