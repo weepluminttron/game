@@ -142,7 +142,7 @@ func _load_settings_from_cfg() -> void:
 	cfg.load("user://settings.cfg")
 	sens = float(cfg.get_value("settings", "sens", 1.0))
 	duration = int(cfg.get_value("settings", "duration", 60))
-	size_mult = float(cfg.get_value("settings", "size", 1.0))
+	size_mult = clampf(float(cfg.get_value("settings", "size", 0.7)), 0.5, 1.0)
 	speed_mult = float(cfg.get_value("settings", "speed", 1.0))
 	spawn_side = str(cfg.get_value("settings", "side", "front"))
 	if spawn_side not in ["front", "back", "left", "right", "all"]:
@@ -870,7 +870,7 @@ func _setup_ui() -> void:
 	y += 34
 	_add_select(panel, "时长", ["30 秒", "60 秒", "120 秒"], _index_of([30, 60, 120], duration), Vector2(40, y), _on_duration)
 	y += 44
-	_add_select(panel, "靶子大小", ["小", "中", "大"], _index_of([0.7, 1.0, 1.4], size_mult), Vector2(40, y), _on_size)
+	_add_select(panel, "靶子大小", ["小", "中", "大"], _index_of([0.5, 0.7, 1.0], size_mult), Vector2(40, y), _on_size)
 	y += 44
 	_add_select(panel, "移动速度", ["慢", "中", "快"], _index_of([0.6, 1.0, 1.6], speed_mult), Vector2(40, y), _on_speed)
 	y += 44
@@ -1252,7 +1252,7 @@ func _on_duration(idx: int) -> void:
 	_save_config()
 
 func _on_size(idx: int) -> void:
-	size_mult = [0.7, 1.0, 1.4][idx]
+	size_mult = [0.5, 0.7, 1.0][idx]
 	_save_config()
 
 func _on_speed(idx: int) -> void:
