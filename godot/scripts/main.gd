@@ -66,6 +66,19 @@ var blockers: Array[StaticBody3D] = []
 var targets: Array = []
 var target_bodies: Dictionary = {}
 var cfg := ConfigFile.new()
+var accounts_cfg := ConfigFile.new()
+var current_user := ""
+var auto_login := false
+var last_user := ""
+var user_names: Array = []
+var login_screen: Control
+var leaderboard_screen: Control
+var user_label: Label
+var user_list: VBoxContainer
+var new_user_input: LineEdit
+var auto_login_cb: CheckBox
+var lb_mode_opt: OptionButton
+var lb_list: VBoxContainer
 
 var hud: Control
 var menu: Control
@@ -85,13 +98,51 @@ var hitmarker_b: ColorRect
 var sounds := {}
 
 func _ready() -> void:
-	_load_config()
+	_load_accounts()
+	if auto_login and user_names.has(last_user):
+		_select_user(last_user)
 	_setup_3d()
 	_setup_ui()
 	_update_menu_values()
+	if current_user == "":
+		_show_login()
+	else:
+		user_label.text = "当前用户：" + current_user
 
-func _load_config() -> void:
-	cfg.load("user://aimtrainer.cfg")
+func _load_accounts() -> void:
+	accounts_cfg.load("user://accounts.cfg")
+	auto_login = bool(accounts_cfg.get_value("accounts", "auto_login", false))
+	last_user = str(accounts_cfg.get_value("accounts", "last_user", ""))
+	user_names = accounts_cfg.get_value("accounts", "names", [])
+
+func _save_accounts() -> void:
+	accounts_cfg.set_value("accounts", "names", user_names)
+	accounts_cfg.set_value("accounts", "last_user", last_user)
+	accounts_cfg.set_value("accounts", "auto_login", auto_login)
+	accounts_cfg.save("user://accounts.cfg")
+
+func _user_path(name: String) -> String:
+	var safe := name.replace("/", "_").replace("\\", "_").replace(":", "_").strip_edges()
+	return "user://users/%s.cfg" % safe
+
+func _select_user(name: String) -> void:
+	current_user = name
+	cfg = ConfigFile.new()
+	cfg.load(_user_path(name))
+	_load_settings_from_cfg()
+	last_user = name
+	_save_accounts()
+
+func _create_user(name: String) -> void:
+	if not user_names.has(name):
+		user_names.append(name)
+	DirAccess.make_dir_recursive_absolute("user://users")
+	var c := ConfigFile.new()
+	c.set_value("profile", "name", name)
+	c.set_value("profile", "created_at", Time.get_datetime_string_from_system())
+	c.save(_user_path(name))
+
+func _load_settings_from_cfg() -> void:
 	sens = float(cfg.get_value("settings", "sens", 1.0))
 	duration = int(cfg.get_value("settings", "duration", 60))
 	size_mult = float(cfg.get_value("settings", "size", 1.0))
@@ -119,7 +170,9 @@ func _save_config() -> void:
 	cfg.set_value("admin", "assist", assist)
 	cfg.set_value("admin", "assist_fov", rad_to_deg(assist_fov))
 	cfg.set_value("admin", "assist_strength", assist_strength)
-	cfg.save("user://aimtrainer.cfg")
+	cfg.set_value("admin", "unlocked", admin_unlocked)
+	DirAccess.make_dir_recursive_absolute("user://users")
+	cfg.save(_user_path(current_user))
 
 func best_key() -> String:
 	return "%s-%d-%s-%s-%s" % [mode, duration, str(size_mult), str(speed_mult), spawn_side]
@@ -523,12 +576,19 @@ func end_round() -> void:
 	var avg := 0.0
 	if kills > 0:
 		avg = elapsed / float(kills)
-	var key := best_key()
-	var prev_best := int(cfg.get_value("best", key, 0))
+	var prev_best := int(cfg.get_value("best", mode, 0))
 	var is_best := score > prev_best
 	if is_best:
-		cfg.set_value("best", key, score)
-		cfg.save("user://aimtrainer.cfg")
+		cfg.set_value("best", mode, score)
+	var hist: Array = cfg.get_value("history", "items", [])
+	hist.append({
+		"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg,
+		"date": Time.get_datetime_string_from_system()
+	})
+	if hist.size() > 20:
+		hist = hist.slice(-20)
+	cfg.set_value("history", "items", hist)
+	cfg.save(_user_path(current_user))
 	res_score_label.text = str(score)
 	res_kills_label.text = str(kills)
 	res_acc_label.text = str(acc) + "%"
@@ -779,6 +839,7 @@ func _setup_ui() -> void:
 	sub.add_theme_font_size_override("font_size", 14)
 	sub.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
 	panel.add_child(sub)
+	user_label = _add_label(panel, "当前用户：", 15, Vector2(420, 26), Vector2(240, 30), HORIZONTAL_ALIGNMENT_RIGHT)
 
 	var y := 120
 	_add_label(panel, "选择模式", 16, Vector2(40, y), Vector2(600, 26))
@@ -827,6 +888,18 @@ func _setup_ui() -> void:
 	admin_btn.pressed.connect(_toggle_admin_login)
 	panel.add_child(admin_btn)
 	admin_btn_node = admin_btn
+	var lb_btn := Button.new()
+	lb_btn.text = "排行榜"
+	lb_btn.position = Vector2(200, y)
+	lb_btn.size = Vector2(140, 34)
+	lb_btn.pressed.connect(_show_leaderboard)
+	panel.add_child(lb_btn)
+	var switch_btn := Button.new()
+	switch_btn.text = "切换用户"
+	switch_btn.position = Vector2(360, y)
+	switch_btn.size = Vector2(140, 34)
+	switch_btn.pressed.connect(_logout)
+	panel.add_child(switch_btn)
 
 	admin_login = Control.new()
 	admin_login.position = Vector2(40, y + 40)
@@ -888,6 +961,85 @@ func _setup_ui() -> void:
 	admin_panel.add_child(exit_btn)
 	if admin_unlocked:
 		admin_panel.visible = true
+
+	# ---------- 登录 / 用户 ----------
+	login_screen = Control.new()
+	login_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	login_screen.theme = theme
+	login_screen.visible = false
+	canvas.add_child(login_screen)
+	var login_bg := ColorRect.new()
+	login_bg.color = Color(0.02, 0.03, 0.05, 0.96)
+	login_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	login_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	login_screen.add_child(login_bg)
+	var login_panel := Panel.new()
+	login_panel.position = Vector2(390, 90)
+	login_panel.size = Vector2(500, 560)
+	login_screen.add_child(login_panel)
+	_add_label(login_panel, "选择用户 / 创建用户", 26, Vector2(0, 24), Vector2(500, 40), HORIZONTAL_ALIGNMENT_CENTER)
+	_add_label(login_panel, "已有用户", 16, Vector2(40, 80), Vector2(200, 26))
+	user_list = VBoxContainer.new()
+	user_list.position = Vector2(40, 112)
+	user_list.size = Vector2(420, 210)
+	login_panel.add_child(user_list)
+	_add_label(login_panel, "新用户", 16, Vector2(40, 330), Vector2(200, 26))
+	new_user_input = LineEdit.new()
+	new_user_input.placeholder_text = "输入昵称（最多 12 字）"
+	new_user_input.max_length = 12
+	new_user_input.position = Vector2(40, 362)
+	new_user_input.size = Vector2(300, 36)
+	new_user_input.text_submitted.connect(_create_and_login)
+	login_panel.add_child(new_user_input)
+	var create_btn := Button.new()
+	create_btn.text = "创建并登录"
+	create_btn.position = Vector2(350, 362)
+	create_btn.size = Vector2(110, 36)
+	create_btn.pressed.connect(_create_and_login)
+	login_panel.add_child(create_btn)
+	auto_login_cb = CheckBox.new()
+	auto_login_cb.text = "自动登录（下次启动直接进入）"
+	auto_login_cb.button_pressed = auto_login
+	auto_login_cb.position = Vector2(40, 420)
+	auto_login_cb.toggled.connect(_on_auto_login)
+	login_panel.add_child(auto_login_cb)
+	_add_label(login_panel, "每个用户独立保存设置、成绩和个人数据", 13, Vector2(40, 470), Vector2(420, 30))
+
+	# ---------- 排行榜 ----------
+	leaderboard_screen = Control.new()
+	leaderboard_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	leaderboard_screen.theme = theme
+	leaderboard_screen.visible = false
+	canvas.add_child(leaderboard_screen)
+	var lb_bg := ColorRect.new()
+	lb_bg.color = Color(0.02, 0.03, 0.05, 0.96)
+	lb_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lb_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	leaderboard_screen.add_child(lb_bg)
+	var lb_panel := Panel.new()
+	lb_panel.position = Vector2(340, 70)
+	lb_panel.size = Vector2(600, 660)
+	leaderboard_screen.add_child(lb_panel)
+	_add_label(lb_panel, "排行榜", 28, Vector2(0, 24), Vector2(600, 44), HORIZONTAL_ALIGNMENT_CENTER)
+	lb_mode_opt = OptionButton.new()
+	lb_mode_opt.position = Vector2(40, 84)
+	lb_mode_opt.size = Vector2(220, 36)
+	lb_mode_opt.add_item("六目标")
+	lb_mode_opt.add_item("跟踪")
+	lb_mode_opt.add_item("极速切换")
+	lb_mode_opt.select(0)
+	lb_mode_opt.item_selected.connect(_refresh_leaderboard)
+	lb_panel.add_child(lb_mode_opt)
+	lb_list = VBoxContainer.new()
+	lb_list.position = Vector2(40, 140)
+	lb_list.size = Vector2(520, 440)
+	lb_panel.add_child(lb_list)
+	var lb_back := Button.new()
+	lb_back.text = "返回"
+	lb_back.position = Vector2(240, 590)
+	lb_back.size = Vector2(120, 42)
+	lb_back.pressed.connect(_close_leaderboard)
+	lb_panel.add_child(lb_back)
 
 	# ---------- HUD ----------
 	hud = Control.new()
@@ -1107,8 +1259,7 @@ func _on_admin_submit(_text: String) -> void:
 	var edit := admin_login.get_node("admin_pass") as LineEdit
 	if hash_str(edit.text) == ADMIN_HASH:
 		admin_unlocked = true
-		cfg.set_value("admin", "unlocked", true)
-		cfg.save("user://aimtrainer.cfg")
+		_save_config()
 		admin_login.visible = false
 		admin_panel.visible = true
 		admin_msg.text = ""
@@ -1119,8 +1270,7 @@ func _on_admin_submit(_text: String) -> void:
 
 func _on_admin_exit() -> void:
 	admin_unlocked = false
-	cfg.set_value("admin", "unlocked", false)
-	cfg.save("user://aimtrainer.cfg")
+	_save_config()
 	admin_panel.visible = false
 
 func _on_triggerbot(on: bool) -> void:
@@ -1156,6 +1306,84 @@ func _back_to_menu() -> void:
 
 func _update_menu_values() -> void:
 	pass
+
+# ---------- 用户系统 ----------
+func _show_login() -> void:
+	login_screen.visible = true
+	menu.visible = false
+	for child in user_list.get_children():
+		child.queue_free()
+	for name in user_names:
+		var btn := Button.new()
+		btn.text = name
+		btn.size = Vector2(420, 42)
+		btn.pressed.connect(_login_as.bind(name))
+		user_list.add_child(btn)
+
+func _login_as(name: String) -> void:
+	_select_user(name)
+	_rebuild_ui()
+	login_screen.visible = false
+	menu.visible = true
+
+func _rebuild_ui() -> void:
+	for child in canvas.get_children():
+		child.queue_free()
+	_setup_ui()
+	user_label.text = "当前用户：" + current_user
+	_update_admin_state()
+
+func _create_and_login(_text: String = "") -> void:
+	var name := new_user_input.text.strip_edges()
+	if name == "":
+		return
+	if name.length() > 12:
+		name = name.substr(0, 12)
+	if not user_names.has(name):
+		_create_user(name)
+	_login_as(name)
+	new_user_input.text = ""
+
+func _on_auto_login(on: bool) -> void:
+	auto_login = on
+	_save_accounts()
+
+func _logout() -> void:
+	current_user = ""
+	last_user = ""
+	_save_accounts()
+	_show_login()
+
+func _show_leaderboard() -> void:
+	leaderboard_screen.visible = true
+	_refresh_leaderboard(lb_mode_opt.selected)
+
+func _close_leaderboard() -> void:
+	leaderboard_screen.visible = false
+
+func _refresh_leaderboard(idx: int) -> void:
+	for child in lb_list.get_children():
+		child.queue_free()
+	var mode_key := [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
+	var entries := []
+	for name in user_names:
+		var c := ConfigFile.new()
+		c.load(_user_path(name))
+		var s := int(c.get_value("best", mode_key, 0))
+		if s > 0:
+			entries.append({"name": name, "score": s})
+	entries.sort_custom(func(a, b): return a["score"] > b["score"])
+	if entries.is_empty():
+		var empty_label := Label.new()
+		empty_label.text = "暂无成绩，先去训练吧"
+		empty_label.add_theme_font_size_override("font_size", 18)
+		lb_list.add_child(empty_label)
+		return
+	for i in mini(entries.size(), 10):
+		var l := Label.new()
+		l.text = "%d.  %s    %d 分" % [i + 1, entries[i]["name"], entries[i]["score"]]
+		l.add_theme_font_size_override("font_size", 18)
+		lb_list.add_child(l)
 
 func hash_str(s: String) -> String:
 	var h := 5381
