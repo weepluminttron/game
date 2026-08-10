@@ -97,6 +97,8 @@ func _load_config() -> void:
 	size_mult = float(cfg.get_value("settings", "size", 1.0))
 	speed_mult = float(cfg.get_value("settings", "speed", 1.0))
 	spawn_side = str(cfg.get_value("settings", "side", "front"))
+	if spawn_side not in ["front", "back", "left", "right", "all"]:
+		spawn_side = "front"
 	smooth_mode = str(cfg.get_value("settings", "smooth", "balanced"))
 	control_mode = str(cfg.get_value("settings", "control", "lock"))
 	triggerbot = bool(cfg.get_value("admin", "triggerbot", false))
@@ -311,11 +313,21 @@ func set_target_visible(t: Dictionary, vis: bool) -> void:
 
 func random_target_pos(exclude: Dictionary) -> Vector3:
 	for i in 24:
+		var base_yaw := yaw
+		if spawn_side == "back":
+			base_yaw = yaw + PI
+		elif spawn_side == "left":
+			base_yaw = yaw + PI / 2.0
+		elif spawn_side == "right":
+			base_yaw = yaw - PI / 2.0
+		elif spawn_side == "all":
+			base_yaw = 0.0
 		var world_yaw := 0.0
-		if spawn_side == "front":
-			world_yaw = yaw + randf_range(-1.2, 1.2)
-		else:
+		if spawn_side == "all":
 			world_yaw = randf_range(-PI, PI)
+		else:
+			# 单面模式收窄到所选方向的正前方约 ±40°
+			world_yaw = base_yaw + randf_range(-0.7, 0.7)
 		var world_pitch := clampf(pitch + randf_range(-0.175, 0.175), -0.1, 0.8)
 		var dir := Vector3(
 			-sin(world_yaw) * cos(world_pitch),
@@ -342,9 +354,23 @@ func random_target_pos(exclude: Dictionary) -> Vector3:
 
 func spawn_target(t: Dictionary) -> void:
 	if mode == MODE_TRACKING:
-		t["ang_y"] = yaw + randf_range(-1.0, 1.0) if spawn_side == "front" else randf_range(-PI, PI)
-		t["ang_y_min"] = yaw - 1.3 if spawn_side == "front" else -PI
-		t["ang_y_max"] = yaw + 1.3 if spawn_side == "front" else PI
+		var base_yaw := yaw
+		if spawn_side == "back":
+			base_yaw = yaw + PI
+		elif spawn_side == "left":
+			base_yaw = yaw + PI / 2.0
+		elif spawn_side == "right":
+			base_yaw = yaw - PI / 2.0
+		elif spawn_side == "all":
+			base_yaw = 0.0
+		if spawn_side == "all":
+			t["ang_y"] = randf_range(-PI, PI)
+			t["ang_y_min"] = -PI
+			t["ang_y_max"] = PI
+		else:
+			t["ang_y"] = base_yaw + randf_range(-0.6, 0.6)
+			t["ang_y_min"] = base_yaw - 0.8
+			t["ang_y_max"] = base_yaw + 0.8
 		t["ang_p"] = clampf(pitch + randf_range(-0.2, 0.2), -0.1, 0.7)
 		t["vy"] = randf_range(0.35, 0.85) * speed_mult * (1.0 if randf() < 0.5 else -1.0)
 		t["vp"] = randf_range(0.25, 0.6) * speed_mult * (1.0 if randf() < 0.5 else -1.0)
@@ -781,7 +807,7 @@ func _setup_ui() -> void:
 	y += 44
 	_add_select(panel, "移动速度", ["慢", "中", "快"], _index_of([0.6, 1.0, 1.6], speed_mult), Vector2(40, y), _on_speed)
 	y += 44
-	_add_select(panel, "靶子生成", ["单面（前方）", "多面（环绕）"], 0 if spawn_side == "front" else 1, Vector2(40, y), _on_side)
+	_add_select(panel, "生成方向", ["前方（单面）", "后方", "左方", "右方", "环绕（多面）"], {"front": 0, "back": 1, "left": 2, "right": 3, "all": 4}[spawn_side], Vector2(40, y), _on_side)
 	y += 44
 	_add_select(panel, "视角控制", ["锁定（点击锁定鼠标）", "拖拽（按住右键转动）"], 0 if control_mode == "lock" else 1, Vector2(40, y), _on_control)
 	y += 44
@@ -1053,7 +1079,7 @@ func _on_speed(idx: int) -> void:
 	_save_config()
 
 func _on_side(idx: int) -> void:
-	spawn_side = "front" if idx == 0 else "all"
+	spawn_side = ["front", "back", "left", "right", "all"][idx]
 	_save_config()
 
 func _on_control(idx: int) -> void:
