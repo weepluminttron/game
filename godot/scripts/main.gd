@@ -28,6 +28,9 @@ var duration := 60
 var size_mult := 1.0
 var speed_mult := 1.0
 var sens := 1.0
+var fov_setting := 90.0
+var crosshair_size := "medium"
+var crosshair_color := Color(0.43, 0.91, 0.65)
 var spawn_side := "front"
 var smooth_mode := "balanced"
 var control_mode := "lock"
@@ -45,6 +48,7 @@ var time_left := 0.0
 var kills := 0
 var shots := 0.0
 var hits := 0.0
+var misses := 0
 var score := 0
 var start_real := 0.0
 
@@ -103,6 +107,9 @@ var hud_acc: Label
 var hud_kills: Label
 var hud_shots: Label
 var hud_assist: Label
+var hud_misses: Label
+var crosshair_parts: Array = []
+var fov_value_label: Label
 var hitmarker_a: ColorRect
 var hitmarker_b: ColorRect
 
@@ -141,6 +148,9 @@ func _load_settings_from_cfg() -> void:
 	cfg = ConfigFile.new()
 	cfg.load("user://settings.cfg")
 	sens = float(cfg.get_value("settings", "sens", 1.0))
+	fov_setting = clampf(float(cfg.get_value("settings", "fov", 90.0)), 70.0, 110.0)
+	crosshair_size = str(cfg.get_value("settings", "crosshair_size", "medium"))
+	crosshair_color = cfg.get_value("settings", "crosshair_color", Color(0.43, 0.91, 0.65))
 	duration = int(cfg.get_value("settings", "duration", 60))
 	size_mult = clampf(float(cfg.get_value("settings", "size", 0.7)), 0.5, 1.0)
 	speed_mult = float(cfg.get_value("settings", "speed", 1.0))
@@ -157,6 +167,9 @@ func _load_settings_from_cfg() -> void:
 
 func _save_config() -> void:
 	cfg.set_value("settings", "sens", sens)
+	cfg.set_value("settings", "fov", fov_setting)
+	cfg.set_value("settings", "crosshair_size", crosshair_size)
+	cfg.set_value("settings", "crosshair_color", crosshair_color)
 	cfg.set_value("settings", "duration", duration)
 	cfg.set_value("settings", "size", size_mult)
 	cfg.set_value("settings", "speed", speed_mult)
@@ -458,6 +471,7 @@ func _fire() -> void:
 	var to := from - cam.global_transform.basis.z * 300.0
 	var res := _raycast(from, to)
 	if res.is_empty():
+		misses += 1
 		_play("miss")
 	else:
 		var t = target_bodies.get(res["collider"])
@@ -546,6 +560,7 @@ func start_round() -> void:
 	kills = 0
 	shots = 0.0
 	hits = 0.0
+	misses = 0
 	score = 0
 	time_left = float(duration)
 	running = true
@@ -555,6 +570,7 @@ func start_round() -> void:
 	menu.visible = false
 	results.visible = false
 	hud.visible = true
+	cam.fov = fov_setting
 	if control_mode == "lock":
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_play("start")
@@ -586,6 +602,8 @@ func end_round() -> void:
 	res_avg_label.text = "%.2f 秒" % avg if kills > 0 else "—"
 	res_best_label.text = str(maxi(prev_best, score))
 	res_newbest_label.text = "🎉 新纪录！" if is_best else ""
+	res_kps_label.text = "%.2f" % (kills / elapsed if kills > 0 else 0.0)
+	res_misses_label.text = str(misses) if mode != MODE_TRACKING else "—"
 	hud.visible = false
 	results.visible = true
 	_play("end")
@@ -826,8 +844,8 @@ func _setup_ui() -> void:
 	menu.add_child(bg)
 
 	var panel := Panel.new()
-	panel.position = Vector2(300, 10)
-	panel.size = Vector2(680, 880)
+	panel.position = Vector2(300, 5)
+	panel.size = Vector2(680, 990)
 	menu.add_child(panel)
 
 	var title := Label.new()
@@ -882,6 +900,37 @@ func _setup_ui() -> void:
 	y += 44
 	_add_sens_row(panel, y)
 	y += 52
+	_add_label(panel, "视野 (FOV)", 14, Vector2(40, y), Vector2(160, 32))
+	var fov_slider := _slider(70, 110, 1, fov_setting, Vector2(210, y), Vector2(260, 32))
+	fov_slider.value_changed.connect(_on_fov)
+	panel.add_child(fov_slider)
+	fov_value_label = _add_label(panel, "%d°" % int(fov_setting), 14, Vector2(480, y), Vector2(60, 32))
+	y += 44
+	_add_label(panel, "准星大小", 14, Vector2(40, y), Vector2(90, 32))
+	var cs_opt := OptionButton.new()
+	cs_opt.position = Vector2(130, y)
+	cs_opt.size = Vector2(110, 36)
+	cs_opt.add_item("小")
+	cs_opt.add_item("中")
+	cs_opt.add_item("大")
+	cs_opt.select({"small": 0, "medium": 1, "large": 2}[crosshair_size])
+	cs_opt.item_selected.connect(_on_crosshair_size)
+	panel.add_child(cs_opt)
+	_add_label(panel, "颜色", 14, Vector2(270, y), Vector2(60, 32))
+	var cc_opt := OptionButton.new()
+	cc_opt.position = Vector2(330, y)
+	cc_opt.size = Vector2(110, 36)
+	var color_names := ["绿", "黄", "红", "白", "青"]
+	var colors := [Color(0.43, 0.91, 0.65), Color(1.0, 0.85, 0.2), Color(1.0, 0.45, 0.4), Color(1, 1, 1), Color(0.3, 0.85, 1.0)]
+	var color_idx := 0
+	for j in colors.size():
+		cc_opt.add_item(color_names[j])
+		if colors[j].is_equal_approx(crosshair_color):
+			color_idx = j
+	cc_opt.select(color_idx)
+	cc_opt.item_selected.connect(_on_crosshair_color.bind(colors))
+	panel.add_child(cc_opt)
+	y += 44
 
 	var start_btn := Button.new()
 	start_btn.text = "开始训练"
@@ -1076,25 +1125,24 @@ func _setup_ui() -> void:
 	hud_kills = _add_label(hud, "击杀 0", 16, Vector2(480, 70), Vector2(320, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_acc = _add_label(hud, "命中率 0%", 16, Vector2(480, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_shots = _add_label(hud, "射击 0", 16, Vector2(640, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
+	hud_misses = _add_label(hud, "未中 0", 16, Vector2(640, 70), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_assist = _add_label(hud, "", 15, Vector2(20, 850), Vector2(400, 30))
 	hud_assist.add_theme_color_override("font_color", Color(1.0, 0.76, 0.3))
 	var ch := Control.new()
 	ch.set_anchors_preset(Control.PRESET_CENTER)
 	ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(ch)
+	crosshair_parts.clear()
 	var dot := ColorRect.new()
-	dot.color = Color(0.43, 0.91, 0.65)
-	dot.position = Vector2(-3, -3)
-	dot.size = Vector2(6, 6)
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ch.add_child(dot)
-	for off in [Vector2(-1, -14), Vector2(-1, 8), Vector2(-14, -1), Vector2(8, -1)]:
+	crosshair_parts.append(dot)
+	for i in 4:
 		var bar := ColorRect.new()
-		bar.color = Color(0.43, 0.91, 0.65)
-		bar.position = off
-		bar.size = Vector2(2, 6) if off.x == -1 else Vector2(6, 2)
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ch.add_child(bar)
+		crosshair_parts.append(bar)
+	apply_crosshair()
 	hitmarker_a = ColorRect.new()
 	hitmarker_a.color = Color(1, 1, 1)
 	hitmarker_a.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1152,7 +1200,7 @@ func _setup_ui() -> void:
 	results.add_child(res_bg)
 	var res_panel := Panel.new()
 	res_panel.position = Vector2(390, 120)
-	res_panel.size = Vector2(500, 460)
+	res_panel.size = Vector2(500, 520)
 	results.add_child(res_panel)
 	_add_label(res_panel, "训练完成", 30, Vector2(0, 30), Vector2(500, 50), HORIZONTAL_ALIGNMENT_CENTER)
 	res_newbest_label = _add_label(res_panel, "", 18, Vector2(0, 80), Vector2(500, 30), HORIZONTAL_ALIGNMENT_CENTER)
@@ -1166,15 +1214,19 @@ func _setup_ui() -> void:
 	res_avg_label = _add_label(res_panel, "", 24, Vector2(40, 264), Vector2(180, 40))
 	_add_label(res_panel, "最佳成绩", 14, Vector2(280, 240), Vector2(180, 24))
 	res_best_label = _add_label(res_panel, "", 24, Vector2(280, 264), Vector2(180, 40))
+	_add_label(res_panel, "击杀/秒", 14, Vector2(40, 330), Vector2(180, 24))
+	res_kps_label = _add_label(res_panel, "", 24, Vector2(40, 354), Vector2(180, 40))
+	_add_label(res_panel, "未命中", 14, Vector2(280, 330), Vector2(180, 24))
+	res_misses_label = _add_label(res_panel, "", 24, Vector2(280, 354), Vector2(180, 40))
 	var again := Button.new()
 	again.text = "再来一次"
-	again.position = Vector2(60, 360)
+	again.position = Vector2(60, 420)
 	again.size = Vector2(180, 50)
 	again.pressed.connect(start_round)
 	res_panel.add_child(again)
 	var back := Button.new()
 	back.text = "返回菜单"
-	back.position = Vector2(260, 360)
+	back.position = Vector2(260, 420)
 	back.size = Vector2(180, 50)
 	back.pressed.connect(_back_to_menu)
 	res_panel.add_child(back)
@@ -1193,6 +1245,8 @@ var res_acc_label: Label
 var res_avg_label: Label
 var res_best_label: Label
 var res_newbest_label: Label
+var res_kps_label: Label
+var res_misses_label: Label
 
 func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
@@ -1280,6 +1334,23 @@ func _on_sens_text(text: String) -> void:
 	if is_finite(v) and v > 0.0:
 		sens = clampf(v, 0.05, 10.0)
 		_save_config()
+
+func _on_fov(v: float) -> void:
+	fov_setting = v
+	fov_value_label.text = "%d°" % int(v)
+	if cam != null:
+		cam.fov = v
+	_save_config()
+
+func _on_crosshair_size(idx: int) -> void:
+	crosshair_size = ["small", "medium", "large"][idx]
+	apply_crosshair()
+	_save_config()
+
+func _on_crosshair_color(idx: int, colors: Array) -> void:
+	crosshair_color = colors[idx]
+	apply_crosshair()
+	_save_config()
 
 func _toggle_admin_login() -> void:
 	if admin_unlocked:
@@ -1505,6 +1576,37 @@ func _hide_hitmarker() -> void:
 	hitmarker_a.visible = false
 	hitmarker_b.visible = false
 
+func apply_crosshair() -> void:
+	if crosshair_parts.is_empty():
+		return
+	var gap := 12.0
+	var dot_size := 6.0
+	var bar_w := 2.0
+	var bar_len := 7.0
+	if crosshair_size == "small":
+		gap = 8.0
+		dot_size = 4.0
+		bar_w = 2.0
+		bar_len = 5.0
+	elif crosshair_size == "large":
+		gap = 16.0
+		dot_size = 8.0
+		bar_w = 3.0
+		bar_len = 9.0
+	var dot: ColorRect = crosshair_parts[0]
+	dot.position = Vector2(-dot_size / 2.0, -dot_size / 2.0)
+	dot.size = Vector2(dot_size, dot_size)
+	for i in 4:
+		var bar: ColorRect = crosshair_parts[i + 1]
+		if i < 2:
+			bar.size = Vector2(bar_w, bar_len)
+			bar.position = Vector2(-bar_w / 2.0, -gap - bar_len) if i == 0 else Vector2(-bar_w / 2.0, gap)
+		else:
+			bar.size = Vector2(bar_len, bar_w)
+			bar.position = Vector2(-gap - bar_len, -bar_w / 2.0) if i == 2 else Vector2(gap, -bar_w / 2.0)
+	for part in crosshair_parts:
+		part.color = crosshair_color
+
 func update_hud() -> void:
 	if hud_timer == null:
 		return
@@ -1516,6 +1618,7 @@ func update_hud() -> void:
 	hud_acc.text = "命中率 %d%%" % acc
 	hud_kills.text = "击杀 %d" % kills
 	hud_shots.text = ("射击 %d" % int(shots)) if mode != MODE_TRACKING else ("射击 %.1f s" % shots)
+	hud_misses.text = "未中 " + (str(misses) if mode != MODE_TRACKING else "—")
 	var parts := []
 	if triggerbot:
 		parts.append("扳机")
