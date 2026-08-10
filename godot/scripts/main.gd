@@ -126,26 +126,46 @@ func best_key() -> String:
 func _setup_3d() -> void:
 	var env_node := WorldEnvironment.new()
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.07, 0.09)
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.04, 0.07, 0.14)
+	sky_mat.sky_horizon_color = Color(0.10, 0.16, 0.28)
+	sky_mat.ground_bottom_color = Color(0.02, 0.03, 0.05)
+	sky_mat.ground_horizon_color = Color(0.08, 0.12, 0.20)
+	var sky_res := Sky.new()
+	sky_res.sky_material = sky_mat
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky_res
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.5
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.glow_enabled = true
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.08
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.05, 0.07, 0.09)
-	env.fog_density = 0.012
+	env.fog_light_color = Color(0.08, 0.12, 0.20)
+	env.fog_density = 0.008
+	env.fog_sky_affect = 0.25
 	env_node.environment = env
 	add_child(env_node)
 
 	var hemi := DirectionalLight3D.new()
 	hemi.rotation_degrees = Vector3(-55, -30, 0)
 	hemi.light_color = Color(1, 0.95, 0.85)
-	hemi.light_energy = 1.4
+	hemi.light_energy = 1.5
 	hemi.shadow_enabled = true
 	hemi.directional_shadow_max_distance = 80.0
 	add_child(hemi)
 
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-15, 135, 0)
+	fill.light_color = Color(0.35, 0.65, 1.0)
+	fill.light_energy = 0.55
+	add_child(fill)
+
 	var amb := OmniLight3D.new()
 	amb.position = Vector3(0, 6, 0)
 	amb.light_color = Color(0.55, 0.65, 0.85)
-	amb.light_energy = 0.6
+	amb.light_energy = 0.7
 	amb.omni_range = 40.0
 	add_child(amb)
 
@@ -155,9 +175,11 @@ func _setup_3d() -> void:
 	add_child(cam)
 	cam.make_current()
 
-	var floor_mat := _mat(Color(0.11, 0.13, 0.17), 0.9)
+	var floor_mat := _mat(Color(0.8, 0.85, 1.0), 0.85)
+	floor_mat.albedo_texture = make_grid_texture()
+	floor_mat.metallic = 0.1
 	_add_box(Vector3(64, 0.2, 64), Vector3(0, -0.1, 0), floor_mat)
-	var wall_mat := _mat(Color(0.1, 0.13, 0.19), 0.85)
+	var wall_mat := _mat(Color(0.10, 0.13, 0.19), 0.85)
 	_add_box(Vector3(64, 14, 1), Vector3(0, 7, -32), wall_mat)
 	_add_box(Vector3(64, 14, 1), Vector3(0, 7, 32), wall_mat)
 	_add_box(Vector3(1, 14, 64), Vector3(-32, 7, 0), wall_mat)
@@ -166,6 +188,17 @@ func _setup_3d() -> void:
 	var pillar_mat := _mat(Color(0.14, 0.18, 0.25), 0.75)
 	for p in [Vector3(-11, 0, -11), Vector3(11, 0, -11), Vector3(-11, 0, 11), Vector3(11, 0, 11)]:
 		_add_box(Vector3(2, 9, 2), p + Vector3(0, 4.5, 0), pillar_mat)
+
+	var accent_mat := _mat(Color(0, 0, 0), 0.4)
+	accent_mat.emission_enabled = true
+	accent_mat.emission = Color(0.25, 0.75, 1.0)
+	accent_mat.emission_energy_multiplier = 2.2
+	for z in [-31.5, 31.5]:
+		_add_deco(Vector3(64, 0.05, 0.08), Vector3(0, 0.03, z), accent_mat)
+	for x in [-31.5, 31.5]:
+		_add_deco(Vector3(0.08, 0.05, 64), Vector3(x, 0.03, 0), accent_mat)
+	for p in [Vector3(-11, 0, -11), Vector3(11, 0, -11), Vector3(-11, 0, 11), Vector3(11, 0, 11)]:
+		_add_deco(Vector3(2.3, 0.08, 2.3), p + Vector3(0, 9.04, 0), accent_mat)
 
 	for s in ["shot", "hit", "kill", "miss", "start", "end"]:
 		var player := AudioStreamPlayer.new()
@@ -195,6 +228,26 @@ func _add_box(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> StaticBod
 	add_child(body)
 	blockers.append(body)
 	return body
+
+func _add_deco(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = pos
+	add_child(mi)
+	return mi
+
+func make_grid_texture() -> ImageTexture:
+	var img := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.08, 0.10, 0.14))
+	for i in 9:
+		var c := 64 * i
+		for j in 512:
+			img.set_pixel(j, c, Color(0.13, 0.19, 0.26))
+			img.set_pixel(c, j, Color(0.13, 0.19, 0.26))
+	return ImageTexture.create_from_image(img)
 
 func make_glow_texture() -> ImageTexture:
 	var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
