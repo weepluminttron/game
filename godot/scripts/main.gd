@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.7"
+const CLIENT_VERSION := "1.0.8"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -214,11 +214,11 @@ func _setup_3d() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky_res
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.5
+	env.ambient_light_energy = 0.8
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.08
+	env.glow_intensity = 0.3
+	env.glow_bloom = 0.0
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.08, 0.12, 0.20)
 	env.fog_density = 0.008
@@ -229,7 +229,7 @@ func _setup_3d() -> void:
 	var hemi := DirectionalLight3D.new()
 	hemi.rotation_degrees = Vector3(-55, -30, 0)
 	hemi.light_color = Color(1, 0.95, 0.85)
-	hemi.light_energy = 1.5
+	hemi.light_energy = 1.7
 	hemi.shadow_enabled = true
 	hemi.directional_shadow_max_distance = 80.0
 	add_child(hemi)
@@ -237,21 +237,24 @@ func _setup_3d() -> void:
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-15, 135, 0)
 	fill.light_color = Color(0.35, 0.65, 1.0)
-	fill.light_energy = 0.55
+	fill.light_energy = 0.7
 	add_child(fill)
 
 	var amb := OmniLight3D.new()
 	amb.position = Vector3(0, 6, 0)
 	amb.light_color = Color(0.55, 0.65, 0.85)
-	amb.light_energy = 0.7
+	amb.light_energy = 0.9
 	amb.omni_range = 40.0
 	add_child(amb)
 
 	cam = Camera3D.new()
 	cam.fov = 90
+	cam.near = 0.1
+	cam.far = 200.0
 	cam.position = Vector3(0, 1.6, 0)
 	add_child(cam)
 	cam.make_current()
+	get_viewport().msaa_3d = Viewport.MSAA_2X
 	viewmodel = Node3D.new()
 	viewmodel.position = VIEWMODEL_BASE
 	cam.add_child(viewmodel)
@@ -278,7 +281,7 @@ func _setup_3d() -> void:
 	var accent_mat := _mat(Color(0, 0, 0), 0.4)
 	accent_mat.emission_enabled = true
 	accent_mat.emission = Color(0.25, 0.75, 1.0)
-	accent_mat.emission_energy_multiplier = 2.2
+	accent_mat.emission_energy_multiplier = 1.0
 	for z in [-31.5, 31.5]:
 		_add_deco(Vector3(64, 0.05, 0.08), Vector3(0, 0.03, z), accent_mat)
 	for x in [-31.5, 31.5]:
@@ -400,12 +403,12 @@ func _add_deco(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> MeshInst
 
 func make_grid_texture() -> ImageTexture:
 	var img := Image.create(512, 512, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0.08, 0.10, 0.14))
+	img.fill(Color(0.13, 0.16, 0.22))
 	for i in 8:
 		var c := 64 * i
 		for j in 512:
-			img.set_pixel(j, c, Color(0.13, 0.19, 0.26))
-			img.set_pixel(c, j, Color(0.13, 0.19, 0.26))
+			img.set_pixel(j, c, Color(0.20, 0.28, 0.38))
+			img.set_pixel(c, j, Color(0.20, 0.28, 0.38))
 	return ImageTexture.create_from_image(img)
 
 func make_glow_texture() -> ImageTexture:
