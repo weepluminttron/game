@@ -104,3 +104,8 @@ pm2 startup
 - 完全免费、无版权费、无收入分成
 - 低多边形训练场场景，Three.js 完全够用，无需为这类项目引入虚幻引擎的 AAA 渲染成本
 - 以后如果要做独立客户端（Windows / 手机安装包），可以考虑把玩法迁移到 Godot（MIT 开源、支持 C#），浏览器版本不受影响
+
+## Godot 客户端版
+
+仓库内的 `godot/` 目录是独立的 Godot 4 桌面客户端，功能与网页版对齐（三种模式、计分、管理员辅助功能）。
+安装 Godot 4.3 或更新版本后，导入 `godot/project.godot` 即可运行，详见 [godot/README.md](godot/README.md)。
