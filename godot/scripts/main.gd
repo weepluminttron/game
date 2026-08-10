@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.11"
+const CLIENT_VERSION := "1.0.12"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -577,6 +577,7 @@ func _fire() -> void:
 			_spawn_burst(res["position"], t["mat"].emission)
 			_on_kill(t)
 		else:
+			misses += 1
 			_play("miss")
 	update_hud()
 
