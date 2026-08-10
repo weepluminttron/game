@@ -229,7 +229,7 @@ import * as THREE from "three";
     for (let i = 0; i < 24; i++) {
       // 以玩家当前视线方向为基准生成，球不会出现在背后、脚下或相机内部
       const worldYaw = spawnSide === "front"
-        ? yaw + (Math.random() * 2 - 1) * 1.2
+        ? yaw + (Math.random() * 2 - 1) * 0.7
         : (Math.random() * 2 - 1) * Math.PI;
       const worldPitch = Math.max(-0.1, Math.min(0.8, pitch + (Math.random() * 2 - 1) * 0.35));
       const dir = new THREE.Vector3(
@@ -262,10 +262,10 @@ import * as THREE from "three";
   function spawnTarget(t) {
     if (mode === "tracking") {
       t.angY = spawnSide === "front"
-        ? yaw + (Math.random() * 2 - 1) * 1.0
+        ? yaw + (Math.random() * 2 - 1) * 0.6
         : (Math.random() * 2 - 1) * Math.PI;
-      t.angYMin = spawnSide === "front" ? yaw - 1.3 : -Math.PI;
-      t.angYMax = spawnSide === "front" ? yaw + 1.3 : Math.PI;
+      t.angYMin = spawnSide === "front" ? yaw - 0.8 : -Math.PI;
+      t.angYMax = spawnSide === "front" ? yaw + 0.8 : Math.PI;
       t.angP = Math.max(-0.1, Math.min(0.7, pitch + (Math.random() * 2 - 1) * 0.4));
       t.vy = (0.35 + Math.random() * 0.5) * speedMult * (Math.random() < 0.5 ? -1 : 1);
       t.vp = (0.25 + Math.random() * 0.35) * speedMult * (Math.random() < 0.5 ? -1 : 1);
