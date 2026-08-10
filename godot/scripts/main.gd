@@ -248,10 +248,10 @@ func make_target(color: Color) -> Dictionary:
 	targets.append(t)
 	return t
 
-func set_target_visible(t: Dictionary, visible: bool) -> void:
-	t["alive"] = visible
-	t["mesh"].visible = visible
-	t["glow"].visible = visible
+func set_target_visible(t: Dictionary, vis: bool) -> void:
+	t["alive"] = vis
+	t["mesh"].visible = vis
+	t["glow"].visible = vis
 
 func random_target_pos(exclude: Dictionary) -> Vector3:
 	for i in 24:
@@ -590,21 +590,21 @@ func _make_tone(freq: float, dur: float, vol: float = 0.3) -> AudioStreamWAV:
 	wav.data = data
 	return wav
 
-func _play(name: String) -> void:
-	var p: AudioStreamPlayer = sounds.get(name)
+func _play(sound_name: String) -> void:
+	var p: AudioStreamPlayer = sounds.get(sound_name)
 	if p == null:
 		return
-	if name == "shot":
+	if sound_name == "shot":
 		p.stream = _make_tone(320, 0.08, 0.25)
-	elif name == "hit":
+	elif sound_name == "hit":
 		p.stream = _make_tone(880, 0.07, 0.3)
-	elif name == "kill":
+	elif sound_name == "kill":
 		p.stream = _make_tone(1040, 0.1, 0.3)
-	elif name == "miss":
+	elif sound_name == "miss":
 		p.stream = _make_tone(160, 0.1, 0.2)
-	elif name == "start":
+	elif sound_name == "start":
 		p.stream = _make_tone(520, 0.1, 0.3)
-	elif name == "end":
+	elif sound_name == "end":
 		p.stream = _make_tone(440, 0.2, 0.3)
 	p.play()
 
@@ -645,11 +645,11 @@ func _setup_ui() -> void:
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray(["Microsoft YaHei", "微软雅黑", "Noto Sans CJK SC", "sans-serif"])
 	theme.default_font = font
-	canvas.theme = theme
 
 	# ---------- 菜单 ----------
 	menu = Control.new()
 	menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	menu.theme = theme
 	canvas.add_child(menu)
 	var bg := ColorRect.new()
 	bg.color = Color(0.02, 0.03, 0.05, 0.94)
@@ -789,6 +789,7 @@ func _setup_ui() -> void:
 	hud = Control.new()
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hud.visible = false
+	hud.theme = theme
 	canvas.add_child(hud)
 	hud_timer = _add_label(hud, "60.0", 40, Vector2(560, 12), Vector2(160, 60), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_score = _add_label(hud, "0", 40, Vector2(740, 12), Vector2(120, 60), HORIZONTAL_ALIGNMENT_CENTER)
@@ -830,6 +831,7 @@ func _setup_ui() -> void:
 	pause_overlay = Control.new()
 	pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pause_overlay.visible = false
+	pause_overlay.theme = theme
 	canvas.add_child(pause_overlay)
 	var pause_bg := ColorRect.new()
 	pause_bg.color = Color(0, 0, 0, 0.6)
@@ -841,6 +843,7 @@ func _setup_ui() -> void:
 	results = Control.new()
 	results.set_anchors_preset(Control.PRESET_FULL_RECT)
 	results.visible = false
+	results.theme = theme
 	canvas.add_child(results)
 	var res_bg := ColorRect.new()
 	res_bg.color = Color(0.02, 0.03, 0.05, 0.94)
@@ -889,7 +892,7 @@ var res_avg_label: Label
 var res_best_label: Label
 var res_newbest_label: Label
 
-func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: int = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.position = pos
@@ -936,7 +939,7 @@ func _index_of(arr: Array, value: Variant) -> int:
 	return arr.find(value) if arr.find(value) >= 0 else 0
 
 # ---------------------------------------------------------------- UI 回调
-func _on_mode_btn(m: String, btn: Button) -> void:
+func _on_mode_btn(m: String, _btn: Button) -> void:
 	current_mode = m
 	for key in mode_buttons:
 		mode_buttons[key].button_pressed = (key == m)
