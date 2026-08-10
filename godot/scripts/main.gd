@@ -313,15 +313,13 @@ func set_target_visible(t: Dictionary, vis: bool) -> void:
 
 func random_target_pos(exclude: Dictionary) -> Vector3:
 	for i in 24:
-		var base_yaw := yaw
+		var base_yaw := 0.0
 		if spawn_side == "back":
-			base_yaw = yaw + PI
+			base_yaw = PI
 		elif spawn_side == "left":
-			base_yaw = yaw + PI / 2.0
+			base_yaw = PI / 2.0
 		elif spawn_side == "right":
-			base_yaw = yaw - PI / 2.0
-		elif spawn_side == "all":
-			base_yaw = 0.0
+			base_yaw = -PI / 2.0
 		var world_yaw := 0.0
 		if spawn_side == "all":
 			world_yaw = randf_range(-PI, PI)
@@ -354,15 +352,13 @@ func random_target_pos(exclude: Dictionary) -> Vector3:
 
 func spawn_target(t: Dictionary) -> void:
 	if mode == MODE_TRACKING:
-		var base_yaw := yaw
+		var base_yaw := 0.0
 		if spawn_side == "back":
-			base_yaw = yaw + PI
+			base_yaw = PI
 		elif spawn_side == "left":
-			base_yaw = yaw + PI / 2.0
+			base_yaw = PI / 2.0
 		elif spawn_side == "right":
-			base_yaw = yaw - PI / 2.0
-		elif spawn_side == "all":
-			base_yaw = 0.0
+			base_yaw = -PI / 2.0
 		if spawn_side == "all":
 			t["ang_y"] = randf_range(-PI, PI)
 			t["ang_y_min"] = -PI
