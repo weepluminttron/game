@@ -78,6 +78,7 @@ var hud_score: Label
 var hud_acc: Label
 var hud_kills: Label
 var hud_shots: Label
+var hud_assist: Label
 var hitmarker_a: ColorRect
 var hitmarker_b: ColorRect
 
@@ -543,7 +544,7 @@ func _process(delta: float) -> void:
 			_update_tracking(delta)
 		if triggerbot and mode != MODE_TRACKING:
 			var now_ms := Time.get_ticks_msec()
-			if now_ms - last_auto_fire > 200 and (control_mode == "drag" or mouse_captured):
+			if now_ms - last_auto_fire > 200:
 				var res := _raycast(cam.global_position, cam.global_position - cam.global_transform.basis.z * 300.0)
 				if not res.is_empty():
 					var t = target_bodies.get(res["collider"])
@@ -806,6 +807,8 @@ func _setup_ui() -> void:
 	hud_kills = _add_label(hud, "击杀 0", 16, Vector2(480, 70), Vector2(320, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_acc = _add_label(hud, "命中率 0%", 16, Vector2(480, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_shots = _add_label(hud, "射击 0", 16, Vector2(640, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
+	hud_assist = _add_label(hud, "", 15, Vector2(20, 850), Vector2(400, 30))
+	hud_assist.add_theme_color_override("font_color", Color(1.0, 0.76, 0.3))
 	var ch := Control.new()
 	ch.set_anchors_preset(Control.PRESET_CENTER)
 	ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1072,3 +1075,9 @@ func update_hud() -> void:
 	hud_acc.text = "命中率 %d%%" % acc
 	hud_kills.text = "击杀 %d" % kills
 	hud_shots.text = ("射击 %d" % int(shots)) if mode != MODE_TRACKING else ("射击 %.1f s" % shots)
+	var parts := []
+	if triggerbot:
+		parts.append("扳机")
+	if assist:
+		parts.append("吸附")
+	hud_assist.text = "辅助: " + ("、".join(parts) if not parts.is_empty() else "关")
