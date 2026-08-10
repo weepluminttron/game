@@ -79,6 +79,10 @@ var new_user_input: LineEdit
 var auto_login_cb: CheckBox
 var lb_mode_opt: OptionButton
 var lb_list: VBoxContainer
+var selected_user := ""
+var login_selected_label: Label
+var login_pass_input: LineEdit
+var login_msg: Label
 
 var hud: Control
 var menu: Control
@@ -133,12 +137,13 @@ func _select_user(name: String) -> void:
 	last_user = name
 	_save_accounts()
 
-func _create_user(name: String) -> void:
+func _create_user(name: String, pass: String) -> void:
 	if not user_names.has(name):
 		user_names.append(name)
 	DirAccess.make_dir_recursive_absolute("user://users")
 	var c := ConfigFile.new()
 	c.set_value("profile", "name", name)
+	c.set_value("profile", "pass_hash", hash_str(pass))
 	c.set_value("profile", "created_at", Time.get_datetime_string_from_system())
 	c.save(_user_path(name))
 
@@ -975,7 +980,7 @@ func _setup_ui() -> void:
 	login_screen.add_child(login_bg)
 	var login_panel := Panel.new()
 	login_panel.position = Vector2(390, 90)
-	login_panel.size = Vector2(500, 560)
+	login_panel.size = Vector2(500, 640)
 	login_screen.add_child(login_panel)
 	_add_label(login_panel, "选择用户 / 创建用户", 26, Vector2(0, 24), Vector2(500, 40), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label(login_panel, "已有用户", 16, Vector2(40, 80), Vector2(200, 26))
@@ -1003,6 +1008,22 @@ func _setup_ui() -> void:
 	auto_login_cb.position = Vector2(40, 420)
 	auto_login_cb.toggled.connect(_on_auto_login)
 	login_panel.add_child(auto_login_cb)
+	login_selected_label = _add_label(login_panel, "已选择：", 14, Vector2(40, 500), Vector2(420, 26))
+	login_pass_input = LineEdit.new()
+	login_pass_input.placeholder_text = "输入密码"
+	login_pass_input.secret = true
+	login_pass_input.position = Vector2(40, 532)
+	login_pass_input.size = Vector2(300, 36)
+	login_pass_input.text_submitted.connect(_try_login)
+	login_panel.add_child(login_pass_input)
+	var login_btn := Button.new()
+	login_btn.text = "登录"
+	login_btn.position = Vector2(350, 532)
+	login_btn.size = Vector2(110, 36)
+	login_btn.pressed.connect(_try_login)
+	login_panel.add_child(login_btn)
+	login_msg = _add_label(login_panel, "", 13, Vector2(40, 576), Vector2(420, 26))
+	login_msg.add_theme_color_override("font_color", Color(1.0, 0.48, 0.43))
 	_add_label(login_panel, "每个用户独立保存设置、成绩和个人数据", 13, Vector2(40, 470), Vector2(420, 30))
 
 	# ---------- 排行榜 ----------
@@ -1311,13 +1332,17 @@ func _update_menu_values() -> void:
 func _show_login() -> void:
 	login_screen.visible = true
 	menu.visible = false
+	selected_user = ""
+	login_selected_label.text = "已选择："
+	login_pass_input.text = ""
+	login_msg.text = ""
 	for child in user_list.get_children():
 		child.queue_free()
 	for name in user_names:
 		var btn := Button.new()
 		btn.text = name
 		btn.size = Vector2(420, 42)
-		btn.pressed.connect(_login_as.bind(name))
+		btn.pressed.connect(_pick_login_user.bind(name))
 		user_list.add_child(btn)
 
 func _login_as(name: String) -> void:
@@ -1336,13 +1361,43 @@ func _rebuild_ui() -> void:
 func _create_and_login(_text: String = "") -> void:
 	var name := new_user_input.text.strip_edges()
 	if name == "":
+		login_msg.text = "请输入昵称"
 		return
 	if name.length() > 12:
 		name = name.substr(0, 12)
-	if not user_names.has(name):
-		_create_user(name)
+	if user_names.has(name):
+		selected_user = name
+		login_selected_label.text = "已选择：" + name
+		_try_login()
+		return
+	if login_pass_input.text == "":
+		login_msg.text = "请设置密码"
+		return
+	_create_user(name, login_pass_input.text)
 	_login_as(name)
 	new_user_input.text = ""
+	login_pass_input.text = ""
+
+func _pick_login_user(name: String) -> void:
+	selected_user = name
+	login_selected_label.text = "已选择：" + name
+	login_msg.text = ""
+
+func _try_login(_text: String = "") -> void:
+	if selected_user == "":
+		login_msg.text = "请先选择用户"
+		return
+	var c := ConfigFile.new()
+	c.load(_user_path(selected_user))
+	var stored := str(c.get_value("profile", "pass_hash", ""))
+	if stored == "":
+		if login_pass_input.text != "":
+			login_msg.text = "该用户没有设置密码，密码留空即可登录"
+			return
+	elif hash_str(login_pass_input.text) != stored:
+		login_msg.text = "密码错误"
+		return
+	_login_as(selected_user)
 
 func _on_auto_login(on: bool) -> void:
 	auto_login = on
