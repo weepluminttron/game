@@ -22,6 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
+const CLIENT_VERSION := "1.0.3"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -94,6 +95,8 @@ var login_pass_input: LineEdit
 var login_msg: Label
 var cloud_url_input: LineEdit
 var cloud_login_btn: Button
+var update_label: Label
+var update_btn: Button
 
 var hud: Control
 var menu: Control
@@ -121,6 +124,7 @@ func _ready() -> void:
 	_setup_3d()
 	_setup_ui()
 	_update_menu_values()
+	_check_update()
 	if auto_login and saved_name != "" and saved_pass != "":
 		_show_login()
 		new_user_input.text = saved_name
@@ -1034,7 +1038,7 @@ func _setup_ui() -> void:
 	login_screen.add_child(login_bg)
 	var login_panel := Panel.new()
 	login_panel.position = Vector2(390, 90)
-	login_panel.size = Vector2(500, 480)
+	login_panel.size = Vector2(500, 540)
 	login_screen.add_child(login_panel)
 	_add_label(login_panel, "云端账号登录", 26, Vector2(0, 24), Vector2(500, 40), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label(login_panel, "服务器地址", 14, Vector2(40, 80), Vector2(160, 26))
@@ -1074,6 +1078,15 @@ func _setup_ui() -> void:
 	login_panel.add_child(auto_login_cb)
 	login_msg = _add_label(login_panel, "", 13, Vector2(40, 350), Vector2(420, 26))
 	login_msg.add_theme_color_override("font_color", Color(1.0, 0.48, 0.43))
+	update_label = _add_label(login_panel, "", 13, Vector2(40, 430), Vector2(420, 26))
+	update_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	update_btn = Button.new()
+	update_btn.text = "去下载新版本"
+	update_btn.position = Vector2(40, 458)
+	update_btn.size = Vector2(200, 38)
+	update_btn.visible = false
+	update_btn.pressed.connect(_download_update)
+	login_panel.add_child(update_btn)
 	_add_label(login_panel, "账号、成绩和排行榜全部保存在服务器", 13, Vector2(40, 390), Vector2(420, 30))
 
 	# ---------- 排行榜 ----------
@@ -1455,6 +1468,13 @@ func _cloud_get(path: String) -> void:
 		http.request_completed.connect(_on_cloud_response)
 	http.request(cloud_url + path, [], HTTPClient.METHOD_GET)
 
+func _check_update() -> void:
+	pending_cloud = "version"
+	_cloud_get("/api/version")
+
+func _download_update() -> void:
+	OS.shell_open(cloud_url + "/download/aim-trainer.zip")
+
 func _cloud_login(_text: String = "") -> void:
 	var name := new_user_input.text.strip_edges()
 	var password := login_pass_input.text
@@ -1491,6 +1511,12 @@ func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, bod
 	elif pending_cloud == "score":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 			cloud_best[mode] = int(data.get("best", cloud_best.get(mode, 0)))
+	elif pending_cloud == "version":
+		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+			var v := str(data.get("version", ""))
+			if v != "" and v != CLIENT_VERSION:
+				update_label.text = "发现新版本 v%s（当前 v%s）" % [v, CLIENT_VERSION]
+				update_btn.visible = true
 	elif pending_cloud == "leaderboard":
 		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 			_fill_cloud_leaderboard(data)
