@@ -779,6 +779,7 @@ func _setup_ui() -> void:
 	ab.position = Vector2(0, 36)
 	ab.toggled.connect(_on_assist)
 	admin_panel.add_child(ab)
+	admin_state_label = _add_label(admin_panel, "", 14, Vector2(0, 60), Vector2(560, 24))
 	var fov_slider := _slider(5, 30, 1, rad_to_deg(assist_fov), Vector2(0, 76), Vector2(420, 30))
 	fov_slider.value_changed.connect(_on_assist_fov)
 	admin_panel.add_child(fov_slider)
@@ -904,6 +905,7 @@ var mode_buttons := {}
 var admin_btn_node: Button
 var admin_login: Control
 var admin_msg: Label
+var admin_state_label: Label
 var assist_fov_label: Label
 var assist_strength_label: Label
 var res_score_label: Label
@@ -1025,10 +1027,17 @@ func _on_admin_exit() -> void:
 func _on_triggerbot(on: bool) -> void:
 	triggerbot = on
 	_save_config()
+	_update_admin_state()
 
 func _on_assist(on: bool) -> void:
 	assist = on
 	_save_config()
+	_update_admin_state()
+
+func _update_admin_state() -> void:
+	if admin_state_label == null:
+		return
+	admin_state_label.text = "当前状态：扳机 %s · 吸附 %s" % ["开" if triggerbot else "关", "开" if assist else "关"]
 
 func _on_assist_fov(v: float) -> void:
 	assist_fov = deg_to_rad(v)
@@ -1080,4 +1089,4 @@ func update_hud() -> void:
 		parts.append("扳机")
 	if assist:
 		parts.append("吸附")
-	hud_assist.text = "辅助: " + ("、".join(parts) if not parts.is_empty() else "关")
+	hud_assist.text = "辅助: " + (PackedStringArray(parts).join("、") if not parts.is_empty() else "关")
