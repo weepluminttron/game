@@ -1089,4 +1089,4 @@ func update_hud() -> void:
 		parts.append("扳机")
 	if assist:
 		parts.append("吸附")
-	hud_assist.text = "辅助: " + (PackedStringArray(parts).join("、") if not parts.is_empty() else "关")
+	hud_assist.text = "辅助: " + ("、".join(PackedStringArray(parts)) if not parts.is_empty() else "关")
