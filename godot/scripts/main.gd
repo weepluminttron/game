@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.5"
+const CLIENT_VERSION := "1.0.6"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -69,6 +69,9 @@ var cam: Camera3D
 var viewmodel: Node3D
 var recoil := 0.0
 const VIEWMODEL_BASE := Vector3(0.28, -0.24, -0.55)
+var preview_mode := false
+var preview_captured := false
+var preview_start_ms := 0
 var canvas: CanvasLayer
 var blockers: Array[StaticBody3D] = []
 var targets: Array = []
@@ -127,8 +130,12 @@ func _ready() -> void:
 	_setup_3d()
 	_setup_ui()
 	_update_menu_values()
-	_check_update()
-	if auto_login and saved_name != "" and saved_pass != "":
+	preview_mode = OS.get_cmdline_user_args().has("--preview")
+	if not preview_mode:
+		_check_update()
+	if preview_mode:
+		_enter_preview()
+	if not preview_mode and auto_login and saved_name != "" and saved_pass != "":
 		_show_login()
 		new_user_input.text = saved_name
 		login_pass_input.text = saved_pass
@@ -324,13 +331,16 @@ func _load_gun_mesh() -> Node3D:
 	if gun_scene == null:
 		return null
 	var inst: Node3D = gun_scene.instantiate()
+	# 该 FBX 导入后枪口已指向 -Z（正前方），不需要额外旋转
+	inst.rotation_degrees = Vector3(0, 0, 0)
 	var bb := _scene_aabb(inst)
 	var max_dim := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
+	var s := 1.0
 	if max_dim > 0.001:
-		var s := 0.32 / max_dim
+		s = 0.32 / max_dim
 		inst.scale = Vector3(s, s, s)
-	inst.rotation_degrees = Vector3(-90, 180, 0)
-	inst.position = Vector3(0.0, -0.01, -0.16)
+	var center := (bb.position + bb.size * 0.5) * s
+	inst.position = Vector3(0.06, -0.10, -0.18) - center
 	return inst
 
 func _scene_aabb(node: Node3D) -> AABB:
@@ -341,7 +351,8 @@ func _scene_aabb(node: Node3D) -> AABB:
 			var mi: MeshInstance3D = child
 			if mi.mesh != null:
 				var a := mi.mesh.get_aabb()
-				var moved := AABB(a.position + child.position, a.size)
+				var s := mi.scale
+				var moved := AABB(a.position * s + child.position, a.size * s)
 				if not has:
 					bb = moved
 					has = true
@@ -350,7 +361,8 @@ func _scene_aabb(node: Node3D) -> AABB:
 		elif child is Node3D:
 			var sub := _scene_aabb(child)
 			if sub.size.length() > 0.0:
-				var moved := AABB(sub.position + child.position, sub.size)
+				var s: Vector3 = child.scale
+				var moved := AABB(sub.position * s + child.position, sub.size * s)
 				if not has:
 					bb = moved
 					has = true
@@ -389,7 +401,7 @@ func _add_deco(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> MeshInst
 func make_grid_texture() -> ImageTexture:
 	var img := Image.create(512, 512, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0.08, 0.10, 0.14))
-	for i in 9:
+	for i in 8:
 		var c := 64 * i
 		for j in 512:
 			img.set_pixel(j, c, Color(0.13, 0.19, 0.26))
@@ -659,6 +671,19 @@ func start_round() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_play("start")
 	update_hud()
+
+func _enter_preview() -> void:
+	start_round()
+	hud.visible = false
+	menu.visible = false
+	login_screen.visible = false
+	results.visible = false
+	pause_overlay.visible = false
+	yaw = -0.5
+	pitch = -0.42
+	target_yaw = yaw
+	target_pitch = pitch
+	preview_start_ms = Time.get_ticks_msec()
 	print("辅助状态: 扳机=", triggerbot, " 吸附=", assist, " FOV=", rad_to_deg(assist_fov), " 强度=", assist_strength)
 
 func end_round() -> void:
@@ -790,6 +815,11 @@ func _quit_to_menu() -> void:
 	menu.visible = true
 
 func _process(delta: float) -> void:
+	if preview_mode and not preview_captured and Time.get_ticks_msec() - preview_start_ms > 1000:
+		preview_captured = true
+		var img := get_viewport().get_texture().get_image()
+		img.save_png("res://preview.png")
+		get_tree().quit()
 	recoil = maxf(0.0, recoil - 4.0 * delta)
 	if viewmodel != null:
 		viewmodel.visible = running and not paused and not finished

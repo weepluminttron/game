@@ -3,6 +3,7 @@ node_modules/
 godot/.godot/
 godot/*.exe
 godot/*.pck
+godot/preview.png
 data/
 dist/
 *.log
