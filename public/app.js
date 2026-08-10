@@ -57,9 +57,11 @@ import * as THREE from "three";
 
   // ---------- 渲染环境 ----------
   const canvas = $("game");
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d1117);
@@ -72,6 +74,15 @@ import * as THREE from "three";
   scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x14161d, 1.1));
   const sun = new THREE.DirectionalLight(0xffffff, 1.4);
   sun.position.set(12, 22, 8);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -35;
+  sun.shadow.camera.right = 35;
+  sun.shadow.camera.top = 35;
+  sun.shadow.camera.bottom = -35;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 70;
+  sun.shadow.bias = -0.0005;
   scene.add(sun);
 
   // ---------- 训练场 ----------
@@ -102,6 +113,7 @@ import * as THREE from "three";
     new THREE.MeshStandardMaterial({ map: makeGridTexture(), roughness: 0.9 })
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
   scene.add(floor);
 
   const blockers = [];
@@ -109,6 +121,8 @@ import * as THREE from "three";
   function addBox(w, h, d, x, y, z, material) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
     blockers.push(mesh);
     return mesh;
@@ -186,6 +200,7 @@ import * as THREE from "three";
       new THREE.SphereGeometry(r, 24, 18),
       new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.3 })
     );
+    sphere.castShadow = true;
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
     );
@@ -205,7 +220,8 @@ import * as THREE from "three";
       vy: 0.4,
       vp: 0.3,
       angYMin: -1.35,
-      angYMax: 1.35
+      angYMax: 1.35,
+      pulsePhase: Math.random() * Math.PI * 2
     };
   }
 
@@ -763,6 +779,12 @@ import * as THREE from "three";
       }
       for (const t of targets) {
         if (!t.alive && now >= t.respawnAt) spawnTarget(t);
+      }
+      // 靶子呼吸光效
+      for (const t of targets) {
+        if (t.alive) {
+          t.sphere.material.emissiveIntensity = 0.45 + 0.25 * (0.5 + 0.5 * Math.sin(now / 260 + t.pulsePhase));
+        }
       }
       updateParticles(dt);
       updateHud();
