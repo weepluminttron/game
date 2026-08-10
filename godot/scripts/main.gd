@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.3"
+const CLIENT_VERSION := "1.0.4"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -66,6 +66,9 @@ var last_auto_fire := 0
 var last_hitmarker := 0
 
 var cam: Camera3D
+var viewmodel: Node3D
+var recoil := 0.0
+const VIEWMODEL_BASE := Vector3(0.28, -0.24, -0.55)
 var canvas: CanvasLayer
 var blockers: Array[StaticBody3D] = []
 var targets: Array = []
@@ -242,6 +245,14 @@ func _setup_3d() -> void:
 	cam.position = Vector3(0, 1.6, 0)
 	add_child(cam)
 	cam.make_current()
+	viewmodel = Node3D.new()
+	viewmodel.position = VIEWMODEL_BASE
+	cam.add_child(viewmodel)
+	viewmodel.add_child(_make_hand())
+	var gun := _load_gun_mesh()
+	if gun != null:
+		viewmodel.add_child(gun)
+	viewmodel.visible = false
 
 	var floor_mat := _mat(Color(0.8, 0.85, 1.0), 0.85)
 	floor_mat.albedo_texture = make_grid_texture()
@@ -278,6 +289,49 @@ func _mat(color: Color, rough: float) -> StandardMaterial3D:
 	m.albedo_color = color
 	m.roughness = rough
 	return m
+
+func _make_hand() -> Node3D:
+	var hand := Node3D.new()
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.16, 0.12, 0.22)
+	skin.roughness = 0.7
+	var palm := MeshInstance3D.new()
+	var palm_mesh := BoxMesh.new()
+	palm_mesh.size = Vector3(0.09, 0.07, 0.12)
+	palm.mesh = palm_mesh
+	palm.material_override = skin
+	hand.add_child(palm)
+	for i in 4:
+		var finger := MeshInstance3D.new()
+		var fm := BoxMesh.new()
+		fm.size = Vector3(0.022, 0.022, 0.10)
+		finger.mesh = fm
+		finger.material_override = skin
+		finger.position = Vector3(-0.033 + i * 0.022, 0.05, -0.065)
+		hand.add_child(finger)
+	var thumb := MeshInstance3D.new()
+	var tm := BoxMesh.new()
+	tm.size = Vector3(0.025, 0.025, 0.08)
+	thumb.mesh = tm
+	thumb.material_override = skin
+	thumb.position = Vector3(0.05, 0.02, -0.02)
+	thumb.rotation.z = 0.7
+	hand.add_child(thumb)
+	return hand
+
+func _load_gun_mesh() -> Node3D:
+	var gun_scene = load("res://assets/models/glock19/Glock-19.fbx")
+	if gun_scene == null:
+		return null
+	var inst: Node3D = gun_scene.instantiate()
+	var bb: AABB = inst.get_aabb()
+	var max_dim := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
+	if max_dim > 0.001:
+		var s := 0.32 / max_dim
+		inst.scale = Vector3(s, s, s)
+	inst.rotation_degrees = Vector3(-90, 180, 0)
+	inst.position = Vector3(0.0, -0.01, -0.16)
+	return inst
 
 func _add_box(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> StaticBody3D:
 	var body := StaticBody3D.new()
@@ -470,6 +524,7 @@ func _fire() -> void:
 	if not running or paused:
 		return
 	shots += 1.0
+	recoil = 1.0
 	_play("shot")
 	var from := cam.global_position
 	var to := from - cam.global_transform.basis.z * 300.0
@@ -710,6 +765,11 @@ func _quit_to_menu() -> void:
 	menu.visible = true
 
 func _process(delta: float) -> void:
+	recoil = maxf(0.0, recoil - 4.0 * delta)
+	if viewmodel != null:
+		viewmodel.visible = running and not paused and not finished
+		viewmodel.position = VIEWMODEL_BASE + Vector3(0, 0, recoil * 0.06)
+		viewmodel.rotation.x = recoil * 0.05
 	var captured := Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED
 	if captured != mouse_captured:
 		mouse_captured = captured
