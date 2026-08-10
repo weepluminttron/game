@@ -1364,7 +1364,7 @@ func _close_leaderboard() -> void:
 func _refresh_leaderboard(idx: int) -> void:
 	for child in lb_list.get_children():
 		child.queue_free()
-	var mode_key := [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
+	var mode_key: String = [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
 	var entries := []
 	for name in user_names:
 		var c := ConfigFile.new()
