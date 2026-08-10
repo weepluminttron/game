@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.4"
+const CLIENT_VERSION := "1.0.5"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -324,7 +324,7 @@ func _load_gun_mesh() -> Node3D:
 	if gun_scene == null:
 		return null
 	var inst: Node3D = gun_scene.instantiate()
-	var bb: AABB = inst.get_aabb()
+	var bb := _scene_aabb(inst)
 	var max_dim := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
 	if max_dim > 0.001:
 		var s := 0.32 / max_dim
@@ -332,6 +332,31 @@ func _load_gun_mesh() -> Node3D:
 	inst.rotation_degrees = Vector3(-90, 180, 0)
 	inst.position = Vector3(0.0, -0.01, -0.16)
 	return inst
+
+func _scene_aabb(node: Node3D) -> AABB:
+	var bb := AABB()
+	var has := false
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mi: MeshInstance3D = child
+			if mi.mesh != null:
+				var a := mi.mesh.get_aabb()
+				var moved := AABB(a.position + child.position, a.size)
+				if not has:
+					bb = moved
+					has = true
+				else:
+					bb = bb.merge(moved)
+		elif child is Node3D:
+			var sub := _scene_aabb(child)
+			if sub.size.length() > 0.0:
+				var moved := AABB(sub.position + child.position, sub.size)
+				if not has:
+					bb = moved
+					has = true
+				else:
+					bb = bb.merge(moved)
+	return bb
 
 func _add_box(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> StaticBody3D:
 	var body := StaticBody3D.new()
@@ -1491,9 +1516,9 @@ func _show_login() -> void:
 	cloud_url_input.text = cloud_url
 	login_msg.text = ""
 
-func _enter_app(name: String) -> void:
-	current_user = name
-	user_label.text = "当前用户：" + name
+func _enter_app(user_name: String) -> void:
+	current_user = user_name
+	user_label.text = "当前用户：" + user_name
 	login_screen.visible = false
 	menu.visible = true
 	_update_admin_state()
@@ -1536,15 +1561,15 @@ func _download_update() -> void:
 	OS.shell_open(cloud_url + "/download/aim-trainer.zip")
 
 func _cloud_login(_text: String = "") -> void:
-	var name := new_user_input.text.strip_edges()
+	var user_name := new_user_input.text.strip_edges()
 	var password := login_pass_input.text
-	if name == "" or password == "":
+	if user_name == "" or password == "":
 		login_msg.text = "请输入昵称和密码"
 		return
-	pending_name = name
+	pending_name = user_name
 	pending_pass = password
 	pending_cloud = "login"
-	_cloud_request("/api/login", {"name": name, "password": password})
+	_cloud_request("/api/login", {"name": user_name, "password": password})
 
 func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	var text := body.get_string_from_utf8()
@@ -1590,19 +1615,19 @@ func _on_cloud_response(result: int, code: int, _headers: PackedStringArray, bod
 			lb_list.add_child(l)
 	pending_cloud = ""
 
-func _cloud_login_ok(name: String, password: String, data: Dictionary) -> void:
+func _cloud_login_ok(user_name: String, password: String, data: Dictionary) -> void:
 	cloud_logged_in = true
 	cloud_pass = password
 	var best_variant = data.get("best", {})
 	cloud_best = best_variant if typeof(best_variant) == TYPE_DICTIONARY else {}
-	saved_name = name
+	saved_name = user_name
 	if auto_login:
 		saved_pass = password
 	else:
 		saved_pass = ""
 	_save_accounts()
-	login_msg.text = "云端登录成功：" + name
-	_enter_app(name)
+	login_msg.text = "云端登录成功：" + user_name
+	_enter_app(user_name)
 
 func _show_leaderboard() -> void:
 	leaderboard_screen.visible = true

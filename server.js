@@ -129,7 +129,7 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
     const urlPath = decodeURIComponent(url.pathname);
     if (urlPath === "/api/version" && req.method === "GET") {
-      sendJson(res, 200, { ok: true, version: "1.0.4", download: "/download/aim-trainer.zip" });
+      sendJson(res, 200, { ok: true, version: "1.0.5", download: "/download/aim-trainer.zip" });
       return;
     }
     if (urlPath === "/api/leaderboard" && req.method === "GET") {
