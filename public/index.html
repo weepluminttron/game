@@ -94,7 +94,16 @@
           <input type="number" id="set-sens-input" min="0.05" max="10" step="0.01" value="1">
         </label>
       </div>
+      <div class="section-title">账号（云端）</div>
+      <div id="account-row">
+        <input id="acc-name" maxlength="12" placeholder="用户名" autocomplete="off">
+        <input id="acc-pass" type="password" placeholder="密码" autocomplete="off">
+        <button id="acc-login">登录</button>
+        <button id="acc-register">注册</button>
+      </div>
+      <p id="account-msg"></p>
       <button id="start-btn">开始训练</button>
+      <button id="lb-btn" class="secondary-btn">排行榜</button>
       <p class="hint">点击画面锁定鼠标 · 移动瞄准 · 左键射击 · Esc 暂停<br>可选拖拽模式：按住右键转动视角</p>
       <div id="admin-area">
         <button id="admin-btn" class="admin-btn">管理员</button>
@@ -140,6 +149,19 @@
         <button id="again-btn">再来一次</button>
         <button id="menu-btn">返回菜单</button>
       </div>
+    </div>
+  </div>
+
+  <div id="leaderboard" class="hidden">
+    <div class="panel">
+      <h2>排行榜</h2>
+      <div id="lb-modes">
+        <button class="lb-mode active" data-mode="sixshot">六目标</button>
+        <button class="lb-mode" data-mode="tracking">跟踪</button>
+        <button class="lb-mode" data-mode="gridshot">极速切换</button>
+      </div>
+      <div id="lb-list"></div>
+      <button id="lb-close" class="secondary-btn">返回</button>
     </div>
   </div>
 

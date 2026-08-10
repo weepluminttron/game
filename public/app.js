@@ -52,7 +52,14 @@ import * as THREE from "three";
     setAssistFov: $("set-assist-fov"),
     setAssistStrength: $("set-assist-strength"),
     fovValue: $("fov-value"),
-    strengthValue: $("strength-value")
+    strengthValue: $("strength-value"),
+    accName: $("acc-name"),
+    accPass: $("acc-pass"),
+    accMsg: $("account-msg"),
+    lbBtn: $("lb-btn"),
+    lbList: $("lb-list"),
+    lbClose: $("lb-close"),
+    leaderboard: $("leaderboard")
   };
 
   // ---------- 渲染环境 ----------
@@ -154,8 +161,9 @@ import * as THREE from "three";
   }
 
   // ---------- 游戏状态 ----------
-  let mode = "sixshot";
-  let sizeMult = 1;
+let mode = "sixshot";
+let account = null;
+let sizeMult = 1;
   let speedMult = 1;
   let running = false;
   let paused = false;
@@ -350,6 +358,17 @@ import * as THREE from "three";
     const prevBest = Number(localStorage.getItem(key) || 0);
     const isBest = score > prevBest;
     if (isBest) localStorage.setItem(key, String(score));
+    if (account) {
+      apiPost("/api/score", {
+        name: account.name,
+        password: account.password,
+        mode,
+        score,
+        kills,
+        acc,
+        avg: avg ? Math.round(avg * 100) / 100 : 0
+      });
+    }
 
     ui.resScore.textContent = score;
     ui.resKills.textContent = kills;
@@ -598,6 +617,101 @@ import * as THREE from "three";
   $("menu-btn").addEventListener("click", () => {
     ui.results.classList.add("hidden");
     ui.menu.classList.remove("hidden");
+  });
+
+  // ---------- 云端账号 ----------
+  async function apiPost(path, payload) {
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    } catch {
+      return { ok: false, error: "无法连接服务器" };
+    }
+  }
+
+  function setAccMsg(text, ok) {
+    ui.accMsg.textContent = text;
+    ui.accMsg.style.color = ok ? "#6ee7a5" : "#ff7b6e";
+  }
+
+  async function doLogin() {
+    const name = ui.accName.value.trim();
+    const password = ui.accPass.value;
+    if (!name || !password) return setAccMsg("请输入用户名和密码");
+    const data = await apiPost("/api/login", { name, password });
+    if (data.ok) {
+      account = { name, password };
+      localStorage.setItem("aimtrainer-acc-name", name);
+      setAccMsg("已登录：" + name, true);
+    } else {
+      setAccMsg(data.error || "登录失败");
+    }
+  }
+
+  async function doRegister() {
+    const name = ui.accName.value.trim();
+    const password = ui.accPass.value;
+    if (!name || !password) return setAccMsg("请输入用户名和密码");
+    if (name.length > 12) return setAccMsg("用户名最多 12 字");
+    const data = await apiPost("/api/register", { name, password });
+    if (data.ok) {
+      account = { name, password };
+      localStorage.setItem("aimtrainer-acc-name", name);
+      setAccMsg("注册成功，已自动登录：" + name, true);
+    } else {
+      setAccMsg(data.error || "注册失败");
+    }
+  }
+
+  const savedAccName = localStorage.getItem("aimtrainer-acc-name");
+  if (savedAccName) ui.accName.value = savedAccName;
+  $("acc-login").addEventListener("click", doLogin);
+  $("acc-register").addEventListener("click", doRegister);
+  ui.accPass.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doLogin();
+  });
+
+  // ---------- 排行榜 ----------
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  async function loadLeaderboard(m) {
+    ui.lbList.innerHTML = '<div class="lb-row"><span>加载中…</span></div>';
+    try {
+      const res = await fetch("/api/leaderboard?mode=" + encodeURIComponent(m));
+      const data = await res.json();
+      if (!data.ok || !data.entries || !data.entries.length) {
+        ui.lbList.innerHTML = '<div class="lb-row"><span>暂无成绩</span></div>';
+        return;
+      }
+      ui.lbList.innerHTML = "";
+      data.entries.forEach((e, i) => {
+        const row = document.createElement("div");
+        row.className = "lb-row";
+        row.innerHTML = `<span class="lb-rank">${i + 1}</span><span>${escapeHtml(e.name)}</span><span>${e.score} 分</span>`;
+        ui.lbList.appendChild(row);
+      });
+    } catch {
+      ui.lbList.innerHTML = '<div class="lb-row"><span>无法连接服务器</span></div>';
+    }
+  }
+
+  ui.lbBtn.addEventListener("click", () => {
+    ui.leaderboard.classList.remove("hidden");
+    const active = document.querySelector(".lb-mode.active");
+    loadLeaderboard(active ? active.dataset.mode : "sixshot");
+  });
+  ui.lbClose.addEventListener("click", () => ui.leaderboard.classList.add("hidden"));
+  document.querySelectorAll(".lb-mode").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".lb-mode").forEach((b) => b.classList.toggle("active", b === btn));
+      loadLeaderboard(btn.dataset.mode);
+    });
   });
 
   // ---------- 管理员模式 ----------

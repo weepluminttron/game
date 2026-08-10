@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 godot/.godot/
+data/
 *.log
 npm-debug.log*
 .DS_Store

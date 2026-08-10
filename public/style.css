@@ -183,6 +183,126 @@ input[type="number"] {
   filter: brightness(1.12);
 }
 
+.secondary-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+#account-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#account-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+#account-row button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(79, 195, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+#account-row button:hover {
+  background: rgba(79, 195, 255, 0.3);
+}
+
+#account-msg {
+  color: #ff7b6e;
+  font-size: 12px;
+  min-height: 16px;
+  text-align: left;
+  margin-bottom: 10px;
+}
+
+/* ---------- 排行榜 ---------- */
+#leaderboard {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 9, 14, 0.9);
+}
+
+#leaderboard .panel {
+  width: min(560px, 92vw);
+}
+
+#lb-modes {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 14px 0;
+}
+
+.lb-mode {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.lb-mode.active {
+  border-color: #4fc3ff;
+  background: rgba(79, 195, 255, 0.16);
+}
+
+#lb-list {
+  min-height: 180px;
+  text-align: left;
+  padding: 8px 20px;
+}
+
+.lb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 15px;
+}
+
+.lb-row .lb-rank {
+  color: #ffd76e;
+  font-weight: 700;
+  width: 40px;
+}
+
+#leaderboard #lb-close {
+  margin-top: 14px;
+}
+
 .hint {
   margin-top: 16px;
   color: rgba(255, 255, 255, 0.45);
