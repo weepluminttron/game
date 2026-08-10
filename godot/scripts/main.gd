@@ -358,7 +358,7 @@ func _update_assist(delta: float) -> void:
 	for t in targets:
 		if not t["alive"]:
 			continue
-		var dir := (t["body"].global_position - cam.global_position).normalized()
+		var dir: Vector3 = (t["body"].global_position - cam.global_position).normalized()
 		var ty := atan2(-dir.x, -dir.z)
 		var tp := asin(clampf(dir.y, -1.0, 1.0))
 		var dy := wrapf(ty - yaw, -PI, PI)
@@ -636,10 +636,6 @@ func _spawn_burst(pos: Vector3, color: Color) -> void:
 	get_tree().create_timer(0.6).timeout.connect(p.queue_free)
 
 # ---------------------------------------------------------------- UI
-func _set_label(name: String, text: String) -> void:
-	var label: Label = get_node_or_null("CanvasLayer/%s" % name)
-	if label != null:
-		label.text = text
 
 func _setup_ui() -> void:
 	glow_tex = make_glow_texture()
@@ -647,7 +643,7 @@ func _setup_ui() -> void:
 	add_child(canvas)
 	var theme := Theme.new()
 	var font := SystemFont.new()
-	font.font_names = PackedStringArray("Microsoft YaHei", "微软雅黑", "Noto Sans CJK SC", "sans-serif")
+	font.font_names = PackedStringArray(["Microsoft YaHei", "微软雅黑", "Noto Sans CJK SC", "sans-serif"])
 	theme.default_font = font
 	canvas.theme = theme
 
@@ -987,7 +983,7 @@ func _toggle_admin_login() -> void:
 		admin_msg.text = ""
 
 func _on_admin_submit(_text: String) -> void:
-	var edit: LineEdit = admin_login.get_node("admin_pass")
+	var edit := admin_login.get_node("admin_pass") as LineEdit
 	if hash_str(edit.text) == ADMIN_HASH:
 		admin_unlocked = true
 		admin_login.visible = false
@@ -1037,10 +1033,11 @@ func _show_hitmarker() -> void:
 	hitmarker_b.visible = true
 	var tw := create_tween()
 	tw.tween_interval(0.12)
-	tw.tween_callback(func() -> void:
-		hitmarker_a.visible = false
-		hitmarker_b.visible = false
-	)
+	tw.tween_callback(_hide_hitmarker)
+
+func _hide_hitmarker() -> void:
+	hitmarker_a.visible = false
+	hitmarker_b.visible = false
 
 func update_hud() -> void:
 	if hud_timer == null:
