@@ -22,7 +22,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.9"
+const CLIENT_VERSION := "1.0.10"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -265,7 +265,6 @@ func _setup_3d() -> void:
 	viewmodel = Node3D.new()
 	viewmodel.position = VIEWMODEL_BASE
 	cam.add_child(viewmodel)
-	viewmodel.add_child(_make_hand())
 	var gun := _load_gun_mesh()
 	if gun != null:
 		viewmodel.add_child(gun)
@@ -306,36 +305,6 @@ func _mat(color: Color, rough: float) -> StandardMaterial3D:
 	m.albedo_color = color
 	m.roughness = rough
 	return m
-
-func _make_hand() -> Node3D:
-	var hand := Node3D.new()
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.22, 0.16, 0.30)
-	skin.metallic = 0.1
-	skin.roughness = 0.55
-	var palm := MeshInstance3D.new()
-	var palm_mesh := BoxMesh.new()
-	palm_mesh.size = Vector3(0.09, 0.07, 0.12)
-	palm.mesh = palm_mesh
-	palm.material_override = skin
-	hand.add_child(palm)
-	for i in 4:
-		var finger := MeshInstance3D.new()
-		var fm := BoxMesh.new()
-		fm.size = Vector3(0.022, 0.022, 0.10)
-		finger.mesh = fm
-		finger.material_override = skin
-		finger.position = Vector3(-0.033 + i * 0.022, 0.05, -0.065)
-		hand.add_child(finger)
-	var thumb := MeshInstance3D.new()
-	var tm := BoxMesh.new()
-	tm.size = Vector3(0.025, 0.025, 0.08)
-	thumb.mesh = tm
-	thumb.material_override = skin
-	thumb.position = Vector3(0.05, 0.02, -0.02)
-	thumb.rotation.z = 0.7
-	hand.add_child(thumb)
-	return hand
 
 func _load_gun_mesh() -> Node3D:
 	var gun_scene = load("res://assets/models/glock19/Glock-19.fbx")
