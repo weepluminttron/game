@@ -137,13 +137,13 @@ func _select_user(name: String) -> void:
 	last_user = name
 	_save_accounts()
 
-func _create_user(name: String, pass: String) -> void:
+func _create_user(name: String, password: String) -> void:
 	if not user_names.has(name):
 		user_names.append(name)
 	DirAccess.make_dir_recursive_absolute("user://users")
 	var c := ConfigFile.new()
 	c.set_value("profile", "name", name)
-	c.set_value("profile", "pass_hash", hash_str(pass))
+	c.set_value("profile", "pass_hash", hash_str(password))
 	c.set_value("profile", "created_at", Time.get_datetime_string_from_system())
 	c.save(_user_path(name))
 
