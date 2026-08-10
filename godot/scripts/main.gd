@@ -650,10 +650,12 @@ func _setup_ui() -> void:
 	menu = Control.new()
 	menu.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu.theme = theme
+	menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(menu)
 	var bg := ColorRect.new()
 	bg.color = Color(0.02, 0.03, 0.05, 0.94)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(bg)
 
 	var panel := Panel.new()
@@ -790,6 +792,7 @@ func _setup_ui() -> void:
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hud.visible = false
 	hud.theme = theme
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(hud)
 	hud_timer = _add_label(hud, "60.0", 40, Vector2(560, 12), Vector2(160, 60), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_score = _add_label(hud, "0", 40, Vector2(740, 12), Vector2(120, 60), HORIZONTAL_ALIGNMENT_CENTER)
@@ -799,6 +802,7 @@ func _setup_ui() -> void:
 	hud_shots = _add_label(hud, "射击 0", 16, Vector2(640, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	var ch := Control.new()
 	ch.set_anchors_preset(Control.PRESET_CENTER)
+	ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(ch)
 	var dot := ColorRect.new()
 	dot.color = Color(0.43, 0.91, 0.65)
@@ -832,10 +836,12 @@ func _setup_ui() -> void:
 	pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pause_overlay.visible = false
 	pause_overlay.theme = theme
+	pause_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(pause_overlay)
 	var pause_bg := ColorRect.new()
 	pause_bg.color = Color(0, 0, 0, 0.6)
 	pause_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pause_overlay.add_child(pause_bg)
 	var pause_label := _add_label(pause_overlay, "已暂停 · 按 Esc 继续", 30, Vector2(440, 320), Vector2(400, 60), HORIZONTAL_ALIGNMENT_CENTER)
 	pause_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -844,10 +850,12 @@ func _setup_ui() -> void:
 	results.set_anchors_preset(Control.PRESET_FULL_RECT)
 	results.visible = false
 	results.theme = theme
+	results.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(results)
 	var res_bg := ColorRect.new()
 	res_bg.color = Color(0.02, 0.03, 0.05, 0.94)
 	res_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	res_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	results.add_child(res_bg)
 	var res_panel := Panel.new()
 	res_panel.position = Vector2(390, 120)
