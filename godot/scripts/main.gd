@@ -103,6 +103,7 @@ func _load_config() -> void:
 	assist = bool(cfg.get_value("admin", "assist", false))
 	assist_fov = deg_to_rad(float(cfg.get_value("admin", "assist_fov", 12.0)))
 	assist_strength = float(cfg.get_value("admin", "assist_strength", 0.4))
+	admin_unlocked = bool(cfg.get_value("admin", "unlocked", false))
 
 func _save_config() -> void:
 	cfg.set_value("settings", "sens", sens)
@@ -434,6 +435,7 @@ func start_round() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_play("start")
 	update_hud()
+	print("辅助状态: 扳机=", triggerbot, " 吸附=", assist, " FOV=", rad_to_deg(assist_fov), " 强度=", assist_strength)
 
 func end_round() -> void:
 	running = false
@@ -515,6 +517,21 @@ func _key_down(code: Key) -> void:
 				skip_until = Time.get_ticks_msec() + 120
 				first_move_after_lock = true
 		return
+	if admin_unlocked:
+		if code == KEY_F1:
+			triggerbot = not triggerbot
+			_save_config()
+			_update_admin_state()
+			update_hud()
+			print("扳机 = ", triggerbot)
+			return
+		if code == KEY_F2:
+			assist = not assist
+			_save_config()
+			_update_admin_state()
+			update_hud()
+			print("吸附 = ", assist)
+			return
 	if code == KEY_R:
 		return
 	if code == KEY_B:
@@ -794,6 +811,8 @@ func _setup_ui() -> void:
 	exit_btn.size = Vector2(200, 36)
 	exit_btn.pressed.connect(_on_admin_exit)
 	admin_panel.add_child(exit_btn)
+	if admin_unlocked:
+		admin_panel.visible = true
 
 	# ---------- HUD ----------
 	hud = Control.new()
@@ -1013,26 +1032,33 @@ func _on_admin_submit(_text: String) -> void:
 	var edit := admin_login.get_node("admin_pass") as LineEdit
 	if hash_str(edit.text) == ADMIN_HASH:
 		admin_unlocked = true
+		cfg.set_value("admin", "unlocked", true)
+		cfg.save("user://aimtrainer.cfg")
 		admin_login.visible = false
 		admin_panel.visible = true
 		admin_msg.text = ""
 		edit.text = ""
+		print("管理员解锁成功")
 	else:
 		admin_msg.text = "密码错误"
 
 func _on_admin_exit() -> void:
 	admin_unlocked = false
+	cfg.set_value("admin", "unlocked", false)
+	cfg.save("user://aimtrainer.cfg")
 	admin_panel.visible = false
 
 func _on_triggerbot(on: bool) -> void:
 	triggerbot = on
 	_save_config()
 	_update_admin_state()
+	print("扳机 = ", triggerbot)
 
 func _on_assist(on: bool) -> void:
 	assist = on
 	_save_config()
 	_update_admin_state()
+	print("吸附 = ", assist)
 
 func _update_admin_state() -> void:
 	if admin_state_label == null:
