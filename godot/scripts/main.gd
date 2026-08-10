@@ -461,11 +461,14 @@ func end_round() -> void:
 	_play("end")
 
 # ---------------------------------------------------------------- 输入
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
+	# 鼠标转动在 _input 处理：发生在界面层之前，确保任何 UI 都拦不住
 	if event is InputEventMouseMotion:
 		if mouse_captured or (control_mode == "drag" and dragging):
 			_apply_mouse(event.relative)
-	elif event is InputEventMouseButton:
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			mouse_down = event.pressed
 			if event.pressed and running and not paused and mode != MODE_TRACKING:
