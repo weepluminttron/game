@@ -901,9 +901,9 @@ func _setup_ui() -> void:
 	_add_sens_row(panel, y)
 	y += 52
 	_add_label(panel, "视野 (FOV)", 14, Vector2(40, y), Vector2(160, 32))
-	var fov_slider := _slider(70, 110, 1, fov_setting, Vector2(210, y), Vector2(260, 32))
-	fov_slider.value_changed.connect(_on_fov)
-	panel.add_child(fov_slider)
+	var cam_fov_slider := _slider(70, 110, 1, fov_setting, Vector2(210, y), Vector2(260, 32))
+	cam_fov_slider.value_changed.connect(_on_fov)
+	panel.add_child(cam_fov_slider)
 	fov_value_label = _add_label(panel, "%d°" % int(fov_setting), 14, Vector2(480, y), Vector2(60, 32))
 	y += 44
 	_add_label(panel, "准星大小", 14, Vector2(40, y), Vector2(90, 32))
