@@ -133,6 +133,22 @@ const server = http.createServer((req, res) => {
       sendJson(res, 200, { ok: true, entries: apiLeaderboard(url.searchParams.get("mode") || "sixshot") });
       return;
     }
+    if (urlPath === "/download/aim-trainer.zip" && req.method === "GET") {
+      const zipPath = path.join(__dirname, "downloads", "aim-trainer.zip");
+      fs.stat(zipPath, (err, stat) => {
+        if (err) {
+          sendJson(res, 404, { ok: false, error: "文件不存在" });
+          return;
+        }
+        res.writeHead(200, {
+          "Content-Type": "application/zip",
+          "Content-Length": stat.size,
+          "Content-Disposition": 'attachment; filename="AimTrainer-Windows.zip"'
+        });
+        fs.createReadStream(zipPath).pipe(res);
+      });
+      return;
+    }
     if (urlPath.startsWith("/api/") && req.method === "POST") {
       handleApi(req, res, urlPath);
       return;
