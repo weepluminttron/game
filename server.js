@@ -113,6 +113,8 @@ async function handleApi(req, res, urlPath) {
       kills: Number(body.kills) || 0,
       acc: Number(body.acc) || 0,
       avg: Number(body.avg) || 0,
+      react: Number(body.react) || 0,
+      aim: Number(body.aim) || 0,
       date: new Date().toISOString()
     });
     if (s.history.length > 20) s.history = s.history.slice(-20);
@@ -129,7 +131,7 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
     const urlPath = decodeURIComponent(url.pathname);
     if (urlPath === "/api/version" && req.method === "GET") {
-      sendJson(res, 200, { ok: true, version: "1.0.12", download: "/download/aim-trainer.zip" });
+      sendJson(res, 200, { ok: true, version: "1.1.0", download: "/download/aim-trainer.zip" });
       return;
     }
     if (urlPath === "/api/leaderboard" && req.method === "GET") {

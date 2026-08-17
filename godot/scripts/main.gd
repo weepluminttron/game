@@ -4,11 +4,13 @@ extends Node3D
 ## 三种模式 / 3D 靶场 / 计分 / 管理员辅助功能，逻辑与网页版对齐。
 
 const MODE_SIXSHOT := "sixshot"
+const MODE_FOURSHOT := "fourshot"
 const MODE_TRACKING := "tracking"
 const MODE_GRIDSHOT := "gridshot"
 
 const MODES := {
 	MODE_SIXSHOT: {"name": "六目标", "count": 6, "color": Color(1.0, 0.42, 0.37), "score": 10, "delay": 0.4},
+	MODE_FOURSHOT: {"name": "四目标", "count": 4, "color": Color(0.95, 0.55, 0.35), "score": 10, "delay": 0.5},
 	MODE_TRACKING: {"name": "跟踪", "count": 1, "color": Color(0.31, 0.76, 1.0), "score": 25, "delay": 0.35},
 	MODE_GRIDSHOT: {"name": "极速切换", "count": 1, "color": Color(1.0, 0.76, 0.3), "score": 15, "delay": 0.2}
 }
@@ -17,12 +19,21 @@ const RAD_PER_PIXEL := deg_to_rad(0.07)
 const PITCH_LIMIT := deg_to_rad(80.0)
 const ADMIN_HASH := "3bacef24"
 
+const GAME_YAW := {
+	"瓦洛兰特": 0.0700,
+	"CS2": 0.0220,
+	"Apex": 0.0220,
+	"守望先锋2": 0.0066,
+	"彩虹六号": 0.0055,
+	"使命召唤": 0.0066
+}
+
 const SMOOTH_PRESETS := {
 	"responsive": [0.25, 16.0],
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.0.12"
+const CLIENT_VERSION := "1.1.0"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -35,6 +46,9 @@ var crosshair_color := Color(0.43, 0.91, 0.65)
 var spawn_side := "front"
 var smooth_mode := "balanced"
 var control_mode := "lock"
+var res_setting := "1280x1000"
+var fullscreen := false
+var stretch_display := false
 
 var admin_unlocked := false
 var triggerbot := false
@@ -52,6 +66,11 @@ var hits := 0.0
 var misses := 0
 var score := 0
 var start_real := 0.0
+var reaction_total := 0.0
+var reaction_count := 0
+var aim_err_total := 0.0
+var aim_err_count := 0
+var flick_count := 0
 
 var mouse_down := false
 var dragging := false
@@ -72,6 +91,20 @@ const VIEWMODEL_BASE := Vector3(0.28, -0.24, -0.55)
 var preview_mode := false
 var preview_captured := false
 var preview_start_ms := 0
+var calibrating := false
+var calib_pixels := 0.0
+var calib_recording := false
+var calib_result := 0.0
+var calibration_screen: Control
+var calib_status: Label
+var calib_result_label: Label
+var calib_apply_btn: Button
+var convert_screen: Control
+var convert_src_opt: OptionButton
+var convert_input: LineEdit
+var convert_out: Label
+var sens_slider: HSlider
+var sens_edit: LineEdit
 var canvas: CanvasLayer
 var blockers: Array[StaticBody3D] = []
 var targets: Array = []
@@ -175,6 +208,9 @@ func _load_settings_from_cfg() -> void:
 		spawn_side = "front"
 	smooth_mode = str(cfg.get_value("settings", "smooth", "balanced"))
 	control_mode = str(cfg.get_value("settings", "control", "lock"))
+	res_setting = str(cfg.get_value("settings", "res", "1280x1000"))
+	fullscreen = bool(cfg.get_value("settings", "fullscreen", false))
+	stretch_display = bool(cfg.get_value("settings", "stretch", false))
 	triggerbot = bool(cfg.get_value("admin", "triggerbot", false))
 	assist = bool(cfg.get_value("admin", "assist", false))
 	assist_fov = deg_to_rad(float(cfg.get_value("admin", "assist_fov", 12.0)))
@@ -192,6 +228,9 @@ func _save_config() -> void:
 	cfg.set_value("settings", "side", spawn_side)
 	cfg.set_value("settings", "smooth", smooth_mode)
 	cfg.set_value("settings", "control", control_mode)
+	cfg.set_value("settings", "res", res_setting)
+	cfg.set_value("settings", "fullscreen", fullscreen)
+	cfg.set_value("settings", "stretch", stretch_display)
 	cfg.set_value("admin", "triggerbot", triggerbot)
 	cfg.set_value("admin", "assist", assist)
 	cfg.set_value("admin", "assist_fov", rad_to_deg(assist_fov))
@@ -456,7 +495,8 @@ func make_target(color: Color) -> Dictionary:
 		"body": body, "mesh": mi, "glow": glow, "mat": mat, "radius": r,
 		"alive": false, "respawn_at": 0.0, "hp": 100.0,
 		"ang_y": 0.0, "ang_p": 0.0, "vy": 0.4, "vp": 0.3,
-		"ang_y_min": -PI, "ang_y_max": PI, "pulse": randf() * TAU
+		"ang_y_min": -PI, "ang_y_max": PI, "pulse": randf() * TAU,
+		"spawn_time": 0.0, "shot_done": false
 	}
 	target_bodies[body] = t
 	targets.append(t)
@@ -482,13 +522,13 @@ func random_target_pos(exclude: Dictionary) -> Vector3:
 		else:
 			# 单面模式收窄到所选方向的正前方约 ±40°
 			world_yaw = base_yaw + randf_range(-0.7, 0.7)
-		var world_pitch := clampf(pitch + randf_range(-0.175, 0.175), -0.1, 0.8)
+		var world_pitch := clampf(pitch + randf_range(-0.42, 0.42), -0.6, 0.85)
 		var dir := Vector3(
 			-sin(world_yaw) * cos(world_pitch),
 			sin(world_pitch),
 			-cos(world_yaw) * cos(world_pitch)
 		)
-		var dist := randf_range(6.5, 10.0)
+		var dist := randf_range(5.5, 11.0)
 		var q := PhysicsRayQueryParameters3D.create(cam.global_position, cam.global_position + dir * dist)
 		q.exclude = [exclude["body"].get_rid()]
 		var res := get_world_3d().direct_space_state.intersect_ray(q)
@@ -499,7 +539,7 @@ func random_target_pos(exclude: Dictionary) -> Vector3:
 		pos.y = maxf(pos.y, 0.7)
 		var ok := true
 		for t in targets:
-			if t["alive"] and t["body"].global_position.distance_to(pos) < 3.0:
+			if t["alive"] and t["body"].global_position.distance_to(pos) < 2.4:
 				ok = false
 				break
 		if ok:
@@ -534,6 +574,8 @@ func spawn_target(t: Dictionary) -> void:
 			t["respawn_at"] = Time.get_ticks_msec() / 1000.0 + 0.3
 			return
 		t["body"].position = pos
+	t["spawn_time"] = Time.get_ticks_msec() / 1000.0
+	t["shot_done"] = false
 	set_target_visible(t, true)
 
 func place_tracking_target(t: Dictionary) -> void:
@@ -562,6 +604,7 @@ func _fire() -> void:
 	shots += 1.0
 	recoil = 1.0
 	_play("shot")
+	_record_shot_stats()
 	var from := cam.global_position
 	var to := from - cam.global_transform.basis.z * 300.0
 	var res := _raycast(from, to)
@@ -658,6 +701,11 @@ func start_round() -> void:
 	hits = 0.0
 	misses = 0
 	score = 0
+	reaction_total = 0.0
+	reaction_count = 0
+	aim_err_total = 0.0
+	aim_err_count = 0
+	flick_count = 0
 	time_left = float(duration)
 	running = true
 	paused = false
@@ -697,13 +745,19 @@ func end_round() -> void:
 	var avg := 0.0
 	if kills > 0:
 		avg = elapsed / float(kills)
+	var react := 0
+	if reaction_count > 0:
+		react = int(round(reaction_total / float(reaction_count)))
+	var aim_err := 0.0
+	if aim_err_count > 0:
+		aim_err = aim_err_total / float(aim_err_count)
 	var prev_best := int(cloud_best.get(mode, 0))
 	var is_best := score > prev_best
 	if cloud_logged_in and cloud_pass != "":
 		pending_cloud = "score"
 		_cloud_request("/api/score", {
 			"name": current_user, "password": cloud_pass,
-			"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg
+			"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg, "react": react, "aim": aim_err
 		})
 	res_score_label.text = str(score)
 	res_kills_label.text = str(kills)
@@ -713,6 +767,9 @@ func end_round() -> void:
 	res_newbest_label.text = "🎉 新纪录！" if is_best else ""
 	res_kps_label.text = "%.2f" % (kills / elapsed if kills > 0 else 0.0)
 	res_misses_label.text = str(misses) if mode != MODE_TRACKING else "—"
+	res_react_label.text = ("%d ms" % react) if reaction_count > 0 else "—"
+	res_aim_label.text = ("%.1f°" % aim_err) if aim_err_count > 0 else "—"
+	res_flick_label.text = str(flick_count) if mode != MODE_TRACKING else "—"
 	hud.visible = false
 	results.visible = true
 	_play("end")
@@ -720,12 +777,24 @@ func end_round() -> void:
 # ---------------------------------------------------------------- 输入
 func _input(event: InputEvent) -> void:
 	# 鼠标转动在 _input 处理：发生在界面层之前，确保任何 UI 都拦不住
+	if calibrating:
+		if event is InputEventMouseMotion and calib_recording:
+			calib_pixels += absf(event.relative.x)
+			var deg := calib_pixels * RAD_PER_PIXEL * sens * 180.0 / PI
+			calib_status.text = "正在转动… 当前 %.0f°（约 180° 后松开）" % deg
+		return
 	if event is InputEventMouseMotion:
 		if mouse_captured or (control_mode == "drag" and dragging):
 			_apply_mouse(event.relative)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
+		if calibrating:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				calib_recording = event.pressed
+				if not event.pressed:
+					_finish_calibration()
+			return
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			mouse_down = event.pressed
 			if event.pressed and running and not paused and mode != MODE_TRACKING:
@@ -757,6 +826,10 @@ func _apply_mouse(rel: Vector2) -> void:
 	target_pitch = clampf(target_pitch, -PITCH_LIMIT, PITCH_LIMIT)
 
 func _key_down(code: Key) -> void:
+	if calibrating:
+		if code == KEY_ESCAPE:
+			_close_calibration()
+		return
 	if code == KEY_ESCAPE:
 		if running and not finished:
 			paused = not paused
@@ -978,7 +1051,7 @@ func _setup_ui() -> void:
 	panel.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "Godot 客户端版 · 与网页版功能对齐"
+	sub.text = "Godot 客户端版 · 四目标/六目标/跟踪/极速切换 · 灵敏度校准"
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sub.position = Vector2(0, 78)
 	sub.size = Vector2(680, 30)
@@ -991,40 +1064,65 @@ func _setup_ui() -> void:
 	var y := 120
 	_add_label(panel, "选择模式", 16, Vector2(40, y), Vector2(600, 26))
 	y += 34
-	for m in [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT]:
+	for m in [MODE_SIXSHOT, MODE_FOURSHOT, MODE_TRACKING, MODE_GRIDSHOT]:
 		var btn := Button.new()
 		btn.text = MODES[m]["name"]
-		btn.position = Vector2(40 + ([MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT].find(m)) * 200, y)
-		btn.size = Vector2(190, 52)
+		var idx := [MODE_SIXSHOT, MODE_FOURSHOT, MODE_TRACKING, MODE_GRIDSHOT].find(m)
+		btn.position = Vector2(40 + idx * 155, y)
+		btn.size = Vector2(150, 52)
 		btn.toggle_mode = true
 		btn.button_pressed = (m == current_mode)
 		btn.pressed.connect(_on_mode_btn.bind(m, btn))
 		panel.add_child(btn)
 		mode_buttons[m] = btn
-	y += 72
+	y += 64
 
 	_add_label(panel, "训练设置", 16, Vector2(40, y), Vector2(600, 26))
 	y += 34
 	_add_select(panel, "时长", ["30 秒", "60 秒", "120 秒"], _index_of([30, 60, 120], duration), Vector2(40, y), _on_duration)
-	y += 44
+	y += 40
 	_add_select(panel, "靶子大小", ["小", "中", "大"], _index_of([0.5, 0.7, 1.0], size_mult), Vector2(40, y), _on_size)
-	y += 44
+	y += 40
 	_add_select(panel, "移动速度", ["慢", "中", "快"], _index_of([0.6, 1.0, 1.6], speed_mult), Vector2(40, y), _on_speed)
-	y += 44
+	y += 40
 	_add_select(panel, "生成方向", ["前方（单面）", "后方", "左方", "右方", "环绕（多面）"], {"front": 0, "back": 1, "left": 2, "right": 3, "all": 4}[spawn_side], Vector2(40, y), _on_side)
-	y += 44
+	y += 40
 	_add_select(panel, "视角控制", ["锁定（点击锁定鼠标）", "拖拽（按住右键转动）"], 0 if control_mode == "lock" else 1, Vector2(40, y), _on_control)
-	y += 44
+	y += 40
 	_add_select(panel, "视角平滑", ["跟手", "平衡", "稳定"], {"responsive": 0, "balanced": 1, "stable": 2}[smooth_mode], Vector2(40, y), _on_smooth)
-	y += 44
+	y += 40
 	_add_sens_row(panel, y)
-	y += 52
+	y += 48
 	_add_label(panel, "视野 (FOV)", 14, Vector2(40, y), Vector2(160, 32))
 	var cam_fov_slider := _slider(70, 110, 1, fov_setting, Vector2(210, y), Vector2(260, 32))
 	cam_fov_slider.value_changed.connect(_on_fov)
 	panel.add_child(cam_fov_slider)
 	fov_value_label = _add_label(panel, "%d°" % int(fov_setting), 14, Vector2(480, y), Vector2(60, 32))
-	y += 44
+	y += 40
+	_add_label(panel, "分辨率", 14, Vector2(40, y), Vector2(90, 32))
+	var res_opt := OptionButton.new()
+	res_opt.position = Vector2(130, y)
+	res_opt.size = Vector2(170, 36)
+	for r in ["1280×720", "1280×1000", "1920×1080", "2560×1440", "1024×768"]:
+		res_opt.add_item(r)
+	res_opt.select({"1280x720": 0, "1280x1000": 1, "1920x1080": 2, "2560x1440": 3, "1024x768": 4}[res_setting])
+	res_opt.item_selected.connect(_on_resolution)
+	panel.add_child(res_opt)
+	var fs_cb := CheckBox.new()
+	fs_cb.text = "全屏"
+	fs_cb.button_pressed = fullscreen
+	fs_cb.position = Vector2(320, y)
+	fs_cb.size = Vector2(80, 36)
+	fs_cb.toggled.connect(_on_fullscreen)
+	panel.add_child(fs_cb)
+	var st_cb := CheckBox.new()
+	st_cb.text = "真实拉伸"
+	st_cb.button_pressed = stretch_display
+	st_cb.position = Vector2(410, y)
+	st_cb.size = Vector2(130, 36)
+	st_cb.toggled.connect(_on_stretch)
+	panel.add_child(st_cb)
+	y += 40
 	_add_label(panel, "准星大小", 14, Vector2(40, y), Vector2(90, 32))
 	var cs_opt := OptionButton.new()
 	cs_opt.position = Vector2(130, y)
@@ -1049,35 +1147,47 @@ func _setup_ui() -> void:
 	cc_opt.select(color_idx)
 	cc_opt.item_selected.connect(_on_crosshair_color.bind(colors))
 	panel.add_child(cc_opt)
-	y += 44
+	y += 40
 
 	var start_btn := Button.new()
 	start_btn.text = "开始训练"
 	start_btn.position = Vector2(40, y)
-	start_btn.size = Vector2(600, 54)
+	start_btn.size = Vector2(430, 54)
 	start_btn.pressed.connect(start_round)
 	panel.add_child(start_btn)
-	y += 70
+	var calib_btn := Button.new()
+	calib_btn.text = "灵敏度校准"
+	calib_btn.position = Vector2(480, y)
+	calib_btn.size = Vector2(160, 54)
+	calib_btn.pressed.connect(_open_calibration)
+	panel.add_child(calib_btn)
+	y += 64
 
 	var admin_btn := Button.new()
 	admin_btn.text = "管理员"
 	admin_btn.position = Vector2(40, y)
-	admin_btn.size = Vector2(140, 34)
+	admin_btn.size = Vector2(130, 34)
 	admin_btn.pressed.connect(_toggle_admin_login)
 	panel.add_child(admin_btn)
 	admin_btn_node = admin_btn
 	var lb_btn := Button.new()
 	lb_btn.text = "排行榜"
-	lb_btn.position = Vector2(200, y)
-	lb_btn.size = Vector2(140, 34)
+	lb_btn.position = Vector2(185, y)
+	lb_btn.size = Vector2(130, 34)
 	lb_btn.pressed.connect(_show_leaderboard)
 	panel.add_child(lb_btn)
 	var switch_btn := Button.new()
 	switch_btn.text = "切换用户"
-	switch_btn.position = Vector2(360, y)
-	switch_btn.size = Vector2(140, 34)
+	switch_btn.position = Vector2(330, y)
+	switch_btn.size = Vector2(130, 34)
 	switch_btn.pressed.connect(_logout)
 	panel.add_child(switch_btn)
+	var conv_btn := Button.new()
+	conv_btn.text = "灵敏度换算"
+	conv_btn.position = Vector2(475, y)
+	conv_btn.size = Vector2(165, 34)
+	conv_btn.pressed.connect(_open_converter)
+	panel.add_child(conv_btn)
 
 	admin_login = Control.new()
 	admin_login.position = Vector2(40, y + 40)
@@ -1224,6 +1334,7 @@ func _setup_ui() -> void:
 	lb_mode_opt.position = Vector2(40, 84)
 	lb_mode_opt.size = Vector2(220, 36)
 	lb_mode_opt.add_item("六目标")
+	lb_mode_opt.add_item("四目标")
 	lb_mode_opt.add_item("跟踪")
 	lb_mode_opt.add_item("极速切换")
 	lb_mode_opt.select(0)
@@ -1239,6 +1350,87 @@ func _setup_ui() -> void:
 	lb_back.size = Vector2(120, 42)
 	lb_back.pressed.connect(_close_leaderboard)
 	lb_panel.add_child(lb_back)
+
+	# ---------- 灵敏度校准 ----------
+	calibration_screen = Control.new()
+	calibration_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	calibration_screen.theme = theme
+	calibration_screen.visible = false
+	canvas.add_child(calibration_screen)
+	var calib_bg := ColorRect.new()
+	calib_bg.color = Color(0.02, 0.03, 0.05, 0.96)
+	calib_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	calib_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	calibration_screen.add_child(calib_bg)
+	var calib_panel := Panel.new()
+	calib_panel.position = Vector2(320, 100)
+	calib_panel.size = Vector2(640, 520)
+	calibration_screen.add_child(calib_panel)
+	_add_label(calib_panel, "灵敏度校准（180° 甩动）", 26, Vector2(0, 26), Vector2(640, 44), HORIZONTAL_ALIGNMENT_CENTER)
+	_add_label(calib_panel, "用一次自然、完整的甩动从身体一侧甩到另一侧（约 180°）。", 15, Vector2(40, 96), Vector2(560, 30))
+	_add_label(calib_panel, "点击开始后鼠标锁定，按住左键甩动，松开后自动计算建议灵敏度。", 15, Vector2(40, 126), Vector2(560, 30))
+	calib_status = _add_label(calib_panel, "准备就绪", 22, Vector2(40, 196), Vector2(560, 40), HORIZONTAL_ALIGNMENT_CENTER)
+	calib_result_label = _add_label(calib_panel, "", 18, Vector2(40, 256), Vector2(560, 60), HORIZONTAL_ALIGNMENT_CENTER)
+	var calib_start := Button.new()
+	calib_start.text = "开始校准"
+	calib_start.position = Vector2(60, 360)
+	calib_start.size = Vector2(200, 50)
+	calib_start.pressed.connect(_start_calibration)
+	calib_panel.add_child(calib_start)
+	calib_apply_btn = Button.new()
+	calib_apply_btn.text = "使用建议值"
+	calib_apply_btn.position = Vector2(280, 360)
+	calib_apply_btn.size = Vector2(200, 50)
+	calib_apply_btn.disabled = true
+	calib_apply_btn.pressed.connect(_apply_calibration)
+	calib_panel.add_child(calib_apply_btn)
+	var calib_back := Button.new()
+	calib_back.text = "返回"
+	calib_back.position = Vector2(500, 360)
+	calib_back.size = Vector2(100, 50)
+	calib_back.pressed.connect(_close_calibration)
+	calib_panel.add_child(calib_back)
+
+	# ---------- 灵敏度换算 ----------
+	convert_screen = Control.new()
+	convert_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	convert_screen.theme = theme
+	convert_screen.visible = false
+	canvas.add_child(convert_screen)
+	var conv_bg := ColorRect.new()
+	conv_bg.color = Color(0.02, 0.03, 0.05, 0.96)
+	conv_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	conv_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	convert_screen.add_child(conv_bg)
+	var conv_panel := Panel.new()
+	conv_panel.position = Vector2(320, 90)
+	conv_panel.size = Vector2(640, 600)
+	convert_screen.add_child(conv_panel)
+	_add_label(conv_panel, "多游戏灵敏度换算", 26, Vector2(0, 24), Vector2(640, 44), HORIZONTAL_ALIGNMENT_CENTER)
+	_add_label(conv_panel, "按各游戏标准角度系数换算，保持 cm/360 一致，结果仅供参考。", 14, Vector2(40, 78), Vector2(560, 30))
+	_add_label(conv_panel, "来源游戏", 15, Vector2(40, 128), Vector2(160, 32))
+	convert_src_opt = OptionButton.new()
+	convert_src_opt.position = Vector2(200, 126)
+	convert_src_opt.size = Vector2(220, 36)
+	for g in GAME_YAW:
+		convert_src_opt.add_item(g)
+	convert_src_opt.select(0)
+	convert_src_opt.item_selected.connect(_on_convert_src)
+	conv_panel.add_child(convert_src_opt)
+	_add_label(conv_panel, "灵敏度", 15, Vector2(40, 178), Vector2(160, 32))
+	convert_input = LineEdit.new()
+	convert_input.text = "1.000"
+	convert_input.position = Vector2(200, 176)
+	convert_input.size = Vector2(220, 36)
+	convert_input.text_submitted.connect(_on_convert_text)
+	conv_panel.add_child(convert_input)
+	convert_out = _add_label(conv_panel, "", 15, Vector2(40, 236), Vector2(560, 300))
+	var conv_back := Button.new()
+	conv_back.text = "返回"
+	conv_back.position = Vector2(270, 540)
+	conv_back.size = Vector2(120, 44)
+	conv_back.pressed.connect(_close_converter)
+	conv_panel.add_child(conv_back)
 
 	# ---------- HUD ----------
 	hud = Control.new()
@@ -1328,7 +1520,7 @@ func _setup_ui() -> void:
 	results.add_child(res_bg)
 	var res_panel := Panel.new()
 	res_panel.position = Vector2(390, 120)
-	res_panel.size = Vector2(500, 520)
+	res_panel.size = Vector2(500, 640)
 	results.add_child(res_panel)
 	_add_label(res_panel, "训练完成", 30, Vector2(0, 30), Vector2(500, 50), HORIZONTAL_ALIGNMENT_CENTER)
 	res_newbest_label = _add_label(res_panel, "", 18, Vector2(0, 80), Vector2(500, 30), HORIZONTAL_ALIGNMENT_CENTER)
@@ -1346,18 +1538,25 @@ func _setup_ui() -> void:
 	res_kps_label = _add_label(res_panel, "", 24, Vector2(40, 354), Vector2(180, 40))
 	_add_label(res_panel, "未命中", 14, Vector2(280, 330), Vector2(180, 24))
 	res_misses_label = _add_label(res_panel, "", 24, Vector2(280, 354), Vector2(180, 40))
+	_add_label(res_panel, "平均反应", 14, Vector2(40, 420), Vector2(180, 24))
+	res_react_label = _add_label(res_panel, "", 24, Vector2(40, 444), Vector2(180, 40))
+	_add_label(res_panel, "平均偏差", 14, Vector2(280, 420), Vector2(180, 24))
+	res_aim_label = _add_label(res_panel, "", 24, Vector2(280, 444), Vector2(180, 40))
+	_add_label(res_panel, "大幅拉枪", 14, Vector2(40, 490), Vector2(180, 24))
+	res_flick_label = _add_label(res_panel, "", 24, Vector2(40, 514), Vector2(180, 40))
 	var again := Button.new()
 	again.text = "再来一次"
-	again.position = Vector2(60, 420)
+	again.position = Vector2(60, 560)
 	again.size = Vector2(180, 50)
 	again.pressed.connect(start_round)
 	res_panel.add_child(again)
 	var back := Button.new()
 	back.text = "返回菜单"
-	back.position = Vector2(260, 420)
+	back.position = Vector2(260, 560)
 	back.size = Vector2(180, 50)
 	back.pressed.connect(_back_to_menu)
 	res_panel.add_child(back)
+	_apply_display()
 
 var current_mode := MODE_SIXSHOT
 var mode_buttons := {}
@@ -1375,6 +1574,9 @@ var res_best_label: Label
 var res_newbest_label: Label
 var res_kps_label: Label
 var res_misses_label: Label
+var res_react_label: Label
+var res_aim_label: Label
+var res_flick_label: Label
 
 func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
@@ -1411,9 +1613,11 @@ func _slider(min_v: float, max_v: float, step: float, value: float, pos: Vector2
 func _add_sens_row(parent: Control, y: int) -> void:
 	_add_label(parent, "灵敏度（无畏契约）", 14, Vector2(40, y), Vector2(180, 32))
 	var slider := _slider(0.05, 10.0, 0.001, sens, Vector2(230, y), Vector2(240, 32))
+	sens_slider = slider
 	slider.value_changed.connect(_on_sens_slider)
 	parent.add_child(slider)
 	var edit := LineEdit.new()
+	sens_edit = edit
 	edit.text = "%.3f" % sens
 	edit.position = Vector2(480, y)
 	edit.size = Vector2(90, 34)
@@ -1455,12 +1659,16 @@ func _on_smooth(idx: int) -> void:
 
 func _on_sens_slider(v: float) -> void:
 	sens = clampf(v, 0.05, 10.0)
+	if sens_edit != null:
+		sens_edit.text = "%.3f" % sens
 	_save_config()
 
 func _on_sens_text(text: String) -> void:
 	var v := float(text)
 	if is_finite(v) and v > 0.0:
 		sens = clampf(v, 0.05, 10.0)
+		if sens_slider != null:
+			sens_slider.value = sens
 		_save_config()
 
 func _on_fov(v: float) -> void:
@@ -1678,7 +1886,7 @@ func _close_leaderboard() -> void:
 func _refresh_leaderboard(idx: int) -> void:
 	for child in lb_list.get_children():
 		child.queue_free()
-	var mode_key: String = [MODE_SIXSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
+	var mode_key: String = [MODE_SIXSHOT, MODE_FOURSHOT, MODE_TRACKING, MODE_GRIDSHOT][idx]
 	if not cloud_logged_in:
 		var need_login := Label.new()
 		need_login.text = "请先登录云端账号"
@@ -1775,3 +1983,148 @@ func update_hud() -> void:
 	if assist:
 		parts.append("吸附")
 	hud_assist.text = "辅助: " + ("、".join(PackedStringArray(parts)) if not parts.is_empty() else "关")
+
+# ---------------------------------------------------------------- 新增功能（v1.1.0）
+func _record_shot_stats() -> void:
+	if mode == MODE_TRACKING:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	var best_d := TAU
+	var best_t: Dictionary = {}
+	for t in targets:
+		if not t["alive"]:
+			continue
+		var dir: Vector3 = (t["body"].global_position - cam.global_position).normalized()
+		var ty := atan2(-dir.x, -dir.z)
+		var tp := asin(clampf(dir.y, -1.0, 1.0))
+		var d := sqrt(pow(wrapf(ty - yaw, -PI, PI), 2.0) + pow(tp - pitch, 2.0))
+		if d < best_d:
+			best_d = d
+			best_t = t
+	if best_d >= TAU:
+		return
+	aim_err_total += rad_to_deg(best_d)
+	aim_err_count += 1
+	if best_d > deg_to_rad(6.0):
+		flick_count += 1
+	if not best_t["shot_done"]:
+		best_t["shot_done"] = true
+		reaction_total += maxf(0.0, now - float(best_t["spawn_time"])) * 1000.0
+		reaction_count += 1
+
+# ---------------------------------------------------------------- 灵敏度校准（180° 甩动）
+func _open_calibration() -> void:
+	calibrating = false
+	calib_pixels = 0.0
+	calib_recording = false
+	calib_result = 0.0
+	calib_status.text = "准备就绪"
+	calib_result_label.text = ""
+	calib_apply_btn.disabled = true
+	calibration_screen.visible = true
+
+func _close_calibration() -> void:
+	calibrating = false
+	calib_recording = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	calibration_screen.visible = false
+
+func _start_calibration() -> void:
+	calib_pixels = 0.0
+	calib_recording = false
+	calib_result = 0.0
+	calibrating = true
+	calib_status.text = "按住鼠标左键，完成一次 180° 甩动后松开"
+	calib_result_label.text = ""
+	calib_apply_btn.disabled = true
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+func _finish_calibration() -> void:
+	calibrating = false
+	calib_recording = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	var deg := calib_pixels * RAD_PER_PIXEL * sens * 180.0 / PI
+	if calib_pixels < 200.0 or deg < 30.0:
+		calib_status.text = "甩动幅度太小或太快，请重新开始"
+		calib_result_label.text = ""
+		calib_apply_btn.disabled = true
+		return
+	var suggested := clampf(sens * (180.0 / deg), 0.05, 10.0)
+	calib_result = roundf(suggested * 1000.0) / 1000.0
+	calib_status.text = "校准完成：本次甩动转了 %.0f°" % deg
+	calib_result_label.text = "建议灵敏度：%.3f（当前 %.3f）" % [calib_result, sens]
+	calib_apply_btn.disabled = false
+
+func _apply_calibration() -> void:
+	if calib_result <= 0.0:
+		return
+	sens = calib_result
+	if sens_slider != null:
+		sens_slider.value = sens
+	if sens_edit != null:
+		sens_edit.text = "%.3f" % sens
+	_save_config()
+	calib_result_label.text = "已应用：%.3f" % sens
+	calib_apply_btn.disabled = true
+
+# ---------------------------------------------------------------- 多游戏灵敏度换算
+func _open_converter() -> void:
+	convert_screen.visible = true
+	if convert_input != null:
+		convert_input.text = "%.3f" % sens
+	_refresh_converter()
+
+func _close_converter() -> void:
+	convert_screen.visible = false
+
+func _on_convert_src(_idx: int) -> void:
+	_refresh_converter()
+
+func _on_convert_text(_text: String) -> void:
+	_refresh_converter()
+
+func _refresh_converter() -> void:
+	var val := float(convert_input.text)
+	if val <= 0.0 or val > 20.0:
+		convert_out.text = "请输入 0.001 ~ 20 之间的灵敏度"
+		return
+	var names := ["瓦洛兰特", "CS2", "Apex", "守望先锋2", "彩虹六号", "使命召唤"]
+	var src: String = names[convert_src_opt.selected]
+	var src_yaw: float = GAME_YAW[src]
+	var lines := PackedStringArray()
+	for g in names:
+		var yaw: float = GAME_YAW[g]
+		var v := val * src_yaw / yaw
+		v = roundf(v * 1000.0) / 1000.0
+		var cm := 360.0 / (yaw * v) / 800.0 * 2.54
+		lines.append("%s：%.3f    （cm/360 @800DPI：%.1f）" % [g, v, cm])
+	convert_out.text = "\n".join(lines)
+
+# ---------------------------------------------------------------- 分辨率与拉伸
+func _on_resolution(idx: int) -> void:
+	var keys := ["1280x720", "1280x1000", "1920x1080", "2560x1440", "1024x768"]
+	res_setting = keys[idx]
+	_save_config()
+	_apply_display()
+
+func _on_fullscreen(on: bool) -> void:
+	fullscreen = on
+	_save_config()
+	_apply_display()
+
+func _on_stretch(on: bool) -> void:
+	stretch_display = on
+	_save_config()
+	_apply_display()
+
+func _apply_display() -> void:
+	var win := get_window()
+	if fullscreen:
+		win.mode = Window.MODE_FULLSCREEN
+	else:
+		win.mode = Window.MODE_WINDOWED
+		var parts := res_setting.split("x")
+		if parts.size() == 2:
+			win.size = Vector2i(int(parts[0]), int(parts[1]))
+	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE if stretch_display else Window.CONTENT_SCALE_ASPECT_EXPAND
