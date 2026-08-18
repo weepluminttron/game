@@ -4,7 +4,7 @@
 
 ## 组成
 
-- `godot/`：Godot 4.3+ 桌面客户端（四种模式、计分、灵敏度校准与换算、管理员辅助功能、云端登录）
+- `godot/`：Godot 4.3+ 桌面客户端（四种模式、难度预设、精细准星编辑器、计分评级、灵敏度校准与换算、管理员辅助功能、云端登录）
 - `server.js`：纯 API 服务器（注册、登录、成绩上传、排行榜），数据保存在服务器 `data/` 目录
 
 ## 服务器部署
@@ -44,5 +44,5 @@ https://www.microsoft.com/en-us/wdsi/filesubmission
 
 当前版本校验值（SHA-256，提交微软时使用）：
 
-- 安装包 `AimTrainer-Windows.zip`：`24EF5B40CFD759F2572229DAE4BA4176CFF1DBE0FA08A72B9E2D3896195166FA`
+- 安装包 `AimTrainer-Windows.zip`：`C8564305FB14680D3CAD1511D4F81A732B839694AD9465DA1F88878643CDE517`
 - 主程序 `AimTrainer.exe`：`3F25A783C272D928A849589BFA744DADF7559AC4AB9234F791269554D4158CF8`

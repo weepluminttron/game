@@ -33,7 +33,7 @@ const SMOOTH_PRESETS := {
 	"balanced": [0.1, 8.0],
 	"stable": [0.05, 4.0]
 }
-const CLIENT_VERSION := "1.1.0"
+const CLIENT_VERSION := "1.2.0"
 
 var mode := MODE_SIXSHOT
 var duration := 60
@@ -41,8 +41,14 @@ var size_mult := 1.0
 var speed_mult := 1.0
 var sens := 1.0
 var fov_setting := 90.0
-var crosshair_size := "medium"
+var crosshair_len := 7.0
+var crosshair_gap := 12.0
+var crosshair_thickness := 2.0
+var crosshair_dot := 0.0
+var crosshair_opacity := 1.0
 var crosshair_color := Color(0.43, 0.91, 0.65)
+var difficulty := "medium"
+var count_mult := 1.0
 var spawn_side := "front"
 var smooth_mode := "balanced"
 var control_mode := "lock"
@@ -71,6 +77,8 @@ var reaction_count := 0
 var aim_err_total := 0.0
 var aim_err_count := 0
 var flick_count := 0
+var first_shots := 0
+var first_hits := 0
 
 var mouse_down := false
 var dragging := false
@@ -103,6 +111,9 @@ var convert_screen: Control
 var convert_src_opt: OptionButton
 var convert_input: LineEdit
 var convert_out: Label
+var crosshair_screen: Control
+var ch_sliders: Array = []
+var ch_labels: Array = []
 var sens_slider: HSlider
 var sens_edit: LineEdit
 var canvas: CanvasLayer
@@ -198,8 +209,32 @@ func _load_settings_from_cfg() -> void:
 	cfg.load("user://settings.cfg")
 	sens = float(cfg.get_value("settings", "sens", 1.0))
 	fov_setting = clampf(float(cfg.get_value("settings", "fov", 90.0)), 70.0, 110.0)
-	crosshair_size = str(cfg.get_value("settings", "crosshair_size", "medium"))
+	var old_size := str(cfg.get_value("settings", "crosshair_size", ""))
+	if old_size == "small":
+		crosshair_len = 5.0
+		crosshair_gap = 8.0
+		crosshair_thickness = 2.0
+		crosshair_dot = 4.0
+	elif old_size == "large":
+		crosshair_len = 9.0
+		crosshair_gap = 16.0
+		crosshair_thickness = 3.0
+		crosshair_dot = 8.0
+	else:
+		crosshair_len = 7.0
+		crosshair_gap = 12.0
+		crosshair_thickness = 2.0
+		crosshair_dot = 0.0
+	crosshair_len = clampf(float(cfg.get_value("settings", "ch_len", crosshair_len)), 3.0, 24.0)
+	crosshair_gap = clampf(float(cfg.get_value("settings", "ch_gap", crosshair_gap)), 0.0, 32.0)
+	crosshair_thickness = clampf(float(cfg.get_value("settings", "ch_thickness", crosshair_thickness)), 1.0, 6.0)
+	crosshair_dot = clampf(float(cfg.get_value("settings", "ch_dot", crosshair_dot)), 0.0, 14.0)
+	crosshair_opacity = clampf(float(cfg.get_value("settings", "ch_opacity", crosshair_opacity)), 0.1, 1.0)
 	crosshair_color = cfg.get_value("settings", "crosshair_color", Color(0.43, 0.91, 0.65))
+	difficulty = str(cfg.get_value("settings", "difficulty", "medium"))
+	if difficulty not in ["easy", "medium", "hard", "expert", "custom"]:
+		difficulty = "medium"
+	count_mult = clampf(float(cfg.get_value("settings", "count_mult", 1.0)), 0.5, 2.0)
 	duration = int(cfg.get_value("settings", "duration", 60))
 	size_mult = clampf(float(cfg.get_value("settings", "size", 0.7)), 0.5, 1.0)
 	speed_mult = float(cfg.get_value("settings", "speed", 1.0))
@@ -220,8 +255,14 @@ func _load_settings_from_cfg() -> void:
 func _save_config() -> void:
 	cfg.set_value("settings", "sens", sens)
 	cfg.set_value("settings", "fov", fov_setting)
-	cfg.set_value("settings", "crosshair_size", crosshair_size)
+	cfg.set_value("settings", "ch_len", crosshair_len)
+	cfg.set_value("settings", "ch_gap", crosshair_gap)
+	cfg.set_value("settings", "ch_thickness", crosshair_thickness)
+	cfg.set_value("settings", "ch_dot", crosshair_dot)
+	cfg.set_value("settings", "ch_opacity", crosshair_opacity)
 	cfg.set_value("settings", "crosshair_color", crosshair_color)
+	cfg.set_value("settings", "difficulty", difficulty)
+	cfg.set_value("settings", "count_mult", count_mult)
 	cfg.set_value("settings", "duration", duration)
 	cfg.set_value("settings", "size", size_mult)
 	cfg.set_value("settings", "speed", speed_mult)
@@ -602,6 +643,9 @@ func _fire() -> void:
 	if not running or paused:
 		return
 	shots += 1.0
+	var is_first := shots == 1.0
+	if is_first:
+		first_shots += 1
 	recoil = 1.0
 	_play("shot")
 	_record_shot_stats()
@@ -614,6 +658,8 @@ func _fire() -> void:
 	else:
 		var t = target_bodies.get(res["collider"])
 		if t != null and t["alive"]:
+			if is_first:
+				first_hits += 1
 			hits += 1.0
 			_show_hitmarker()
 			_play("hit")
@@ -692,7 +738,8 @@ func start_round() -> void:
 	targets.clear()
 	target_bodies.clear()
 	var cfg_mode: Dictionary = MODES[mode]
-	for i in cfg_mode["count"]:
+	var target_count := maxi(1, int(round(float(cfg_mode["count"]) * count_mult)))
+	for i in target_count:
 		make_target(cfg_mode["color"])
 	for t in targets:
 		spawn_target(t)
@@ -706,6 +753,8 @@ func start_round() -> void:
 	aim_err_total = 0.0
 	aim_err_count = 0
 	flick_count = 0
+	first_shots = 0
+	first_hits = 0
 	time_left = float(duration)
 	running = true
 	paused = false
@@ -751,13 +800,16 @@ func end_round() -> void:
 	var aim_err := 0.0
 	if aim_err_count > 0:
 		aim_err = aim_err_total / float(aim_err_count)
+	var first_acc := 0
+	if mode != MODE_TRACKING and first_shots > 0:
+		first_acc = int(round(first_hits / float(first_shots) * 100.0))
 	var prev_best := int(cloud_best.get(mode, 0))
 	var is_best := score > prev_best
 	if cloud_logged_in and cloud_pass != "":
 		pending_cloud = "score"
 		_cloud_request("/api/score", {
 			"name": current_user, "password": cloud_pass,
-			"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg, "react": react, "aim": aim_err
+			"mode": mode, "score": score, "kills": kills, "acc": acc, "avg": avg, "react": react, "aim": aim_err, "first": first_acc
 		})
 	res_score_label.text = str(score)
 	res_kills_label.text = str(kills)
@@ -770,6 +822,26 @@ func end_round() -> void:
 	res_react_label.text = ("%d ms" % react) if reaction_count > 0 else "—"
 	res_aim_label.text = ("%.1f°" % aim_err) if aim_err_count > 0 else "—"
 	res_flick_label.text = str(flick_count) if mode != MODE_TRACKING else "—"
+	res_first_label.text = ("%d%%" % first_acc) if mode != MODE_TRACKING and first_shots > 0 else "—"
+	var grade := "D"
+	var grade_color := Color(0.9, 0.45, 0.4)
+	if kills > 0:
+		var expected := float({"sixshot": 45, "fourshot": 50, "tracking": 110, "gridshot": 100}[mode]) * float(duration) / 60.0
+		var perf := float(acc) + 100.0 * clampf(float(kills) / expected, 0.0, 1.0)
+		if perf >= 175.0:
+			grade = "S"
+			grade_color = Color(1.0, 0.84, 0.3)
+		elif perf >= 150.0:
+			grade = "A"
+			grade_color = Color(0.35, 0.9, 0.5)
+		elif perf >= 120.0:
+			grade = "B"
+			grade_color = Color(0.35, 0.75, 1.0)
+		elif perf >= 85.0:
+			grade = "C"
+			grade_color = Color(1.0, 0.65, 0.3)
+	res_grade_label.text = "评级 " + grade
+	res_grade_label.add_theme_color_override("font_color", grade_color)
 	hud.visible = false
 	results.visible = true
 	_play("end")
@@ -1081,9 +1153,33 @@ func _setup_ui() -> void:
 	y += 34
 	_add_select(panel, "时长", ["30 秒", "60 秒", "120 秒"], _index_of([30, 60, 120], duration), Vector2(40, y), _on_duration)
 	y += 40
-	_add_select(panel, "靶子大小", ["小", "中", "大"], _index_of([0.5, 0.7, 1.0], size_mult), Vector2(40, y), _on_size)
-	y += 40
-	_add_select(panel, "移动速度", ["慢", "中", "快"], _index_of([0.6, 1.0, 1.6], speed_mult), Vector2(40, y), _on_speed)
+	_add_label(panel, "难度预设", 14, Vector2(40, y), Vector2(90, 32))
+	diff_opt = OptionButton.new()
+	diff_opt.position = Vector2(130, y)
+	diff_opt.size = Vector2(120, 36)
+	for d_name in ["简单", "中等", "困难", "专家", "自定义"]:
+		diff_opt.add_item(d_name)
+	diff_opt.select({"easy": 0, "medium": 1, "hard": 2, "expert": 3, "custom": 4}[difficulty])
+	diff_opt.item_selected.connect(_on_difficulty)
+	panel.add_child(diff_opt)
+	_add_label(panel, "靶子大小", 14, Vector2(280, y), Vector2(80, 32))
+	size_opt = OptionButton.new()
+	size_opt.position = Vector2(360, y)
+	size_opt.size = Vector2(110, 36)
+	for sz_name in ["小", "中", "大"]:
+		size_opt.add_item(sz_name)
+	size_opt.select(_index_of([0.5, 0.7, 1.0], size_mult))
+	size_opt.item_selected.connect(_on_size)
+	panel.add_child(size_opt)
+	_add_label(panel, "移动速度", 14, Vector2(490, y), Vector2(80, 32))
+	speed_opt = OptionButton.new()
+	speed_opt.position = Vector2(565, y)
+	speed_opt.size = Vector2(100, 36)
+	for sp_name in ["慢", "中", "快"]:
+		speed_opt.add_item(sp_name)
+	speed_opt.select(_index_of([0.6, 1.0, 1.6], speed_mult))
+	speed_opt.item_selected.connect(_on_speed)
+	panel.add_child(speed_opt)
 	y += 40
 	_add_select(panel, "生成方向", ["前方（单面）", "后方", "左方", "右方", "环绕（多面）"], {"front": 0, "back": 1, "left": 2, "right": 3, "all": 4}[spawn_side], Vector2(40, y), _on_side)
 	y += 40
@@ -1123,19 +1219,15 @@ func _setup_ui() -> void:
 	st_cb.toggled.connect(_on_stretch)
 	panel.add_child(st_cb)
 	y += 40
-	_add_label(panel, "准星大小", 14, Vector2(40, y), Vector2(90, 32))
-	var cs_opt := OptionButton.new()
-	cs_opt.position = Vector2(130, y)
-	cs_opt.size = Vector2(110, 36)
-	cs_opt.add_item("小")
-	cs_opt.add_item("中")
-	cs_opt.add_item("大")
-	cs_opt.select({"small": 0, "medium": 1, "large": 2}[crosshair_size])
-	cs_opt.item_selected.connect(_on_crosshair_size)
-	panel.add_child(cs_opt)
-	_add_label(panel, "颜色", 14, Vector2(270, y), Vector2(60, 32))
+	var ch_btn := Button.new()
+	ch_btn.text = "准星设置"
+	ch_btn.position = Vector2(40, y)
+	ch_btn.size = Vector2(140, 36)
+	ch_btn.pressed.connect(_open_crosshair_editor)
+	panel.add_child(ch_btn)
+	_add_label(panel, "颜色", 14, Vector2(220, y), Vector2(60, 32))
 	var cc_opt := OptionButton.new()
-	cc_opt.position = Vector2(330, y)
+	cc_opt.position = Vector2(280, y)
 	cc_opt.size = Vector2(110, 36)
 	var color_names := ["绿", "黄", "红", "白", "青"]
 	var colors := [Color(0.43, 0.91, 0.65), Color(1.0, 0.85, 0.2), Color(1.0, 0.45, 0.4), Color(1, 1, 1), Color(0.3, 0.85, 1.0)]
@@ -1432,6 +1524,71 @@ func _setup_ui() -> void:
 	conv_back.pressed.connect(_close_converter)
 	conv_panel.add_child(conv_back)
 
+	# ---------- 准星编辑器 ----------
+	crosshair_screen = Control.new()
+	crosshair_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	crosshair_screen.theme = theme
+	crosshair_screen.visible = false
+	canvas.add_child(crosshair_screen)
+	var ch_bg := ColorRect.new()
+	ch_bg.color = Color(0.02, 0.03, 0.05, 0.96)
+	ch_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ch_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair_screen.add_child(ch_bg)
+	var ch_panel := Panel.new()
+	ch_panel.position = Vector2(320, 80)
+	ch_panel.size = Vector2(640, 640)
+	crosshair_screen.add_child(ch_panel)
+	_add_label(ch_panel, "准星设置", 26, Vector2(0, 24), Vector2(640, 44), HORIZONTAL_ALIGNMENT_CENTER)
+	_add_label(ch_panel, "实时预览", 14, Vector2(40, 78), Vector2(120, 26))
+	var ch_preview := Control.new()
+	ch_preview.position = Vector2(160, 70)
+	ch_preview.size = Vector2(460, 140)
+	ch_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ch_panel.add_child(ch_preview)
+	ch_preview_parts.clear()
+	var pd := ColorRect.new()
+	pd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ch_preview.add_child(pd)
+	ch_preview_parts.append(pd)
+	for i in 4:
+		var pb := ColorRect.new()
+		pb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ch_preview.add_child(pb)
+		ch_preview_parts.append(pb)
+	_style_crosshair(ch_preview_parts, crosshair_gap, crosshair_dot, crosshair_thickness, crosshair_len, crosshair_opacity, crosshair_color)
+	var ch_rows := [
+		["长度", 3, 24, 1, crosshair_len, "%d"],
+		["间隙", 0, 32, 1, crosshair_gap, "%d"],
+		["粗细", 1, 6, 1, crosshair_thickness, "%d"],
+		["中心点", 0, 14, 1, crosshair_dot, "%d"],
+		["透明度", 10, 100, 5, crosshair_opacity * 100.0, "%d%%"]
+	]
+	var ch_y := 220
+	for ci in ch_rows.size():
+		var crow: Array = ch_rows[ci]
+		_add_label(ch_panel, str(crow[0]), 14, Vector2(40, ch_y), Vector2(160, 32))
+		var cs := _slider(float(crow[1]), float(crow[2]), float(crow[3]), float(crow[4]), Vector2(200, ch_y), Vector2(300, 32))
+		cs.value_changed.connect(_on_ch_slider.bind(ci))
+		ch_panel.add_child(cs)
+		ch_sliders.append(cs)
+		var cl := _add_label(ch_panel, "", 14, Vector2(520, ch_y), Vector2(80, 32))
+		ch_labels.append(cl)
+		ch_y += 40
+	_sync_crosshair_ui()
+	var ch_reset := Button.new()
+	ch_reset.text = "重置默认"
+	ch_reset.position = Vector2(80, 560)
+	ch_reset.size = Vector2(180, 48)
+	ch_reset.pressed.connect(_reset_crosshair)
+	ch_panel.add_child(ch_reset)
+	var ch_done := Button.new()
+	ch_done.text = "完成"
+	ch_done.position = Vector2(380, 560)
+	ch_done.size = Vector2(180, 48)
+	ch_done.pressed.connect(_close_crosshair_editor)
+	ch_panel.add_child(ch_done)
+
 	# ---------- HUD ----------
 	hud = Control.new()
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1446,6 +1603,7 @@ func _setup_ui() -> void:
 	hud_acc = _add_label(hud, "命中率 0%", 16, Vector2(480, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_shots = _add_label(hud, "射击 0", 16, Vector2(640, 96), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_misses = _add_label(hud, "未中 0", 16, Vector2(640, 70), Vector2(160, 30), HORIZONTAL_ALIGNMENT_CENTER)
+	hud_first = _add_label(hud, "首枪 —", 16, Vector2(820, 96), Vector2(180, 30), HORIZONTAL_ALIGNMENT_CENTER)
 	hud_assist = _add_label(hud, "", 15, Vector2(20, 850), Vector2(400, 30))
 	hud_assist.add_theme_color_override("font_color", Color(1.0, 0.76, 0.3))
 	var ch := Control.new()
@@ -1519,40 +1677,43 @@ func _setup_ui() -> void:
 	res_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	results.add_child(res_bg)
 	var res_panel := Panel.new()
-	res_panel.position = Vector2(390, 120)
-	res_panel.size = Vector2(500, 640)
+	res_panel.position = Vector2(390, 80)
+	res_panel.size = Vector2(500, 760)
 	results.add_child(res_panel)
-	_add_label(res_panel, "训练完成", 30, Vector2(0, 30), Vector2(500, 50), HORIZONTAL_ALIGNMENT_CENTER)
-	res_newbest_label = _add_label(res_panel, "", 18, Vector2(0, 80), Vector2(500, 30), HORIZONTAL_ALIGNMENT_CENTER)
-	_add_label(res_panel, "得分", 14, Vector2(40, 130), Vector2(120, 24))
-	res_score_label = _add_label(res_panel, "", 26, Vector2(40, 154), Vector2(120, 40))
-	_add_label(res_panel, "击杀", 14, Vector2(210, 130), Vector2(120, 24))
-	res_kills_label = _add_label(res_panel, "", 26, Vector2(210, 154), Vector2(120, 40))
-	_add_label(res_panel, "命中率", 14, Vector2(380, 130), Vector2(120, 24))
-	res_acc_label = _add_label(res_panel, "", 26, Vector2(380, 154), Vector2(120, 40))
-	_add_label(res_panel, "平均每杀", 14, Vector2(40, 240), Vector2(180, 24))
-	res_avg_label = _add_label(res_panel, "", 24, Vector2(40, 264), Vector2(180, 40))
-	_add_label(res_panel, "最佳成绩", 14, Vector2(280, 240), Vector2(180, 24))
-	res_best_label = _add_label(res_panel, "", 24, Vector2(280, 264), Vector2(180, 40))
-	_add_label(res_panel, "击杀/秒", 14, Vector2(40, 330), Vector2(180, 24))
-	res_kps_label = _add_label(res_panel, "", 24, Vector2(40, 354), Vector2(180, 40))
-	_add_label(res_panel, "未命中", 14, Vector2(280, 330), Vector2(180, 24))
-	res_misses_label = _add_label(res_panel, "", 24, Vector2(280, 354), Vector2(180, 40))
-	_add_label(res_panel, "平均反应", 14, Vector2(40, 420), Vector2(180, 24))
-	res_react_label = _add_label(res_panel, "", 24, Vector2(40, 444), Vector2(180, 40))
-	_add_label(res_panel, "平均偏差", 14, Vector2(280, 420), Vector2(180, 24))
-	res_aim_label = _add_label(res_panel, "", 24, Vector2(280, 444), Vector2(180, 40))
-	_add_label(res_panel, "大幅拉枪", 14, Vector2(40, 490), Vector2(180, 24))
-	res_flick_label = _add_label(res_panel, "", 24, Vector2(40, 514), Vector2(180, 40))
+	_add_label(res_panel, "训练完成", 28, Vector2(0, 22), Vector2(500, 40), HORIZONTAL_ALIGNMENT_CENTER)
+	res_grade_label = _add_label(res_panel, "", 44, Vector2(0, 66), Vector2(500, 56), HORIZONTAL_ALIGNMENT_CENTER)
+	res_newbest_label = _add_label(res_panel, "", 16, Vector2(0, 126), Vector2(500, 26), HORIZONTAL_ALIGNMENT_CENTER)
+	_add_label(res_panel, "得分", 14, Vector2(40, 170), Vector2(120, 24))
+	res_score_label = _add_label(res_panel, "", 24, Vector2(40, 194), Vector2(120, 36))
+	_add_label(res_panel, "击杀", 14, Vector2(210, 170), Vector2(120, 24))
+	res_kills_label = _add_label(res_panel, "", 24, Vector2(210, 194), Vector2(120, 36))
+	_add_label(res_panel, "命中率", 14, Vector2(380, 170), Vector2(120, 24))
+	res_acc_label = _add_label(res_panel, "", 24, Vector2(380, 194), Vector2(120, 36))
+	_add_label(res_panel, "平均每杀", 14, Vector2(40, 260), Vector2(180, 24))
+	res_avg_label = _add_label(res_panel, "", 22, Vector2(40, 284), Vector2(180, 36))
+	_add_label(res_panel, "最佳成绩", 14, Vector2(280, 260), Vector2(180, 24))
+	res_best_label = _add_label(res_panel, "", 22, Vector2(280, 284), Vector2(180, 36))
+	_add_label(res_panel, "击杀/秒", 14, Vector2(40, 350), Vector2(180, 24))
+	res_kps_label = _add_label(res_panel, "", 22, Vector2(40, 374), Vector2(180, 36))
+	_add_label(res_panel, "未命中", 14, Vector2(280, 350), Vector2(180, 24))
+	res_misses_label = _add_label(res_panel, "", 22, Vector2(280, 374), Vector2(180, 36))
+	_add_label(res_panel, "平均反应", 14, Vector2(40, 440), Vector2(180, 24))
+	res_react_label = _add_label(res_panel, "", 22, Vector2(40, 464), Vector2(180, 36))
+	_add_label(res_panel, "平均偏差", 14, Vector2(280, 440), Vector2(180, 24))
+	res_aim_label = _add_label(res_panel, "", 22, Vector2(280, 464), Vector2(180, 36))
+	_add_label(res_panel, "大幅拉枪", 14, Vector2(40, 530), Vector2(180, 24))
+	res_flick_label = _add_label(res_panel, "", 22, Vector2(40, 554), Vector2(180, 36))
+	_add_label(res_panel, "首枪命中", 14, Vector2(280, 530), Vector2(180, 24))
+	res_first_label = _add_label(res_panel, "", 22, Vector2(280, 554), Vector2(180, 36))
 	var again := Button.new()
 	again.text = "再来一次"
-	again.position = Vector2(60, 560)
+	again.position = Vector2(60, 640)
 	again.size = Vector2(180, 50)
 	again.pressed.connect(start_round)
 	res_panel.add_child(again)
 	var back := Button.new()
 	back.text = "返回菜单"
-	back.position = Vector2(260, 560)
+	back.position = Vector2(260, 640)
 	back.size = Vector2(180, 50)
 	back.pressed.connect(_back_to_menu)
 	res_panel.add_child(back)
@@ -1577,6 +1738,13 @@ var res_misses_label: Label
 var res_react_label: Label
 var res_aim_label: Label
 var res_flick_label: Label
+var res_first_label: Label
+var res_grade_label: Label
+var hud_first: Label
+var diff_opt: OptionButton
+var size_opt: OptionButton
+var speed_opt: OptionButton
+var ch_preview_parts: Array = []
 
 func _add_label(parent: Control, text: String, font_size: int, pos: Vector2, size: Vector2, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
 	var l := Label.new()
@@ -1639,10 +1807,18 @@ func _on_duration(idx: int) -> void:
 
 func _on_size(idx: int) -> void:
 	size_mult = [0.5, 0.7, 1.0][idx]
+	if difficulty != "custom":
+		difficulty = "custom"
+		if diff_opt != null:
+			diff_opt.select(4)
 	_save_config()
 
 func _on_speed(idx: int) -> void:
 	speed_mult = [0.6, 1.0, 1.6][idx]
+	if difficulty != "custom":
+		difficulty = "custom"
+		if diff_opt != null:
+			diff_opt.select(4)
 	_save_config()
 
 func _on_side(idx: int) -> void:
@@ -1678,9 +1854,23 @@ func _on_fov(v: float) -> void:
 		cam.fov = v
 	_save_config()
 
-func _on_crosshair_size(idx: int) -> void:
-	crosshair_size = ["small", "medium", "large"][idx]
-	apply_crosshair()
+func _on_difficulty(idx: int) -> void:
+	difficulty = ["easy", "medium", "hard", "expert", "custom"][idx]
+	if difficulty != "custom":
+		var presets := {
+			"easy": [1.0, 0.6, 0.5],
+			"medium": [0.7, 1.0, 1.0],
+			"hard": [0.5, 1.4, 1.5],
+			"expert": [0.5, 1.8, 2.0]
+		}
+		var p: Array = presets[difficulty]
+		size_mult = p[0]
+		speed_mult = p[1]
+		count_mult = p[2]
+		if size_opt != null:
+			size_opt.select(_index_of([0.5, 0.7, 1.0], size_mult))
+		if speed_opt != null:
+			speed_opt.select(_index_of([0.6, 1.0, 1.6], speed_mult))
 	_save_config()
 
 func _on_crosshair_color(idx: int, colors: Array) -> void:
@@ -1935,35 +2125,30 @@ func _hide_hitmarker() -> void:
 	hitmarker_b.visible = false
 
 func apply_crosshair() -> void:
-	if crosshair_parts.is_empty():
+	_style_crosshair(crosshair_parts, crosshair_gap, crosshair_dot, crosshair_thickness, crosshair_len, crosshair_opacity, crosshair_color)
+	if ch_preview_parts.size() >= 5:
+		_style_crosshair(ch_preview_parts, crosshair_gap, crosshair_dot, crosshair_thickness, crosshair_len, crosshair_opacity, crosshair_color)
+
+func _style_crosshair(parts: Array, gap: float, dot_size: float, bar_w: float, bar_len: float, opacity: float, color: Color) -> void:
+	if parts.is_empty():
 		return
-	var gap := 12.0
-	var dot_size := 6.0
-	var bar_w := 2.0
-	var bar_len := 7.0
-	if crosshair_size == "small":
-		gap = 8.0
-		dot_size = 4.0
-		bar_w = 2.0
-		bar_len = 5.0
-	elif crosshair_size == "large":
-		gap = 16.0
-		dot_size = 8.0
-		bar_w = 3.0
-		bar_len = 9.0
-	var dot: ColorRect = crosshair_parts[0]
-	dot.position = Vector2(-dot_size / 2.0, -dot_size / 2.0)
-	dot.size = Vector2(dot_size, dot_size)
+	var dot: ColorRect = parts[0]
+	if dot_size > 0.5:
+		dot.position = Vector2(-dot_size / 2.0, -dot_size / 2.0)
+		dot.size = Vector2(dot_size, dot_size)
+		dot.visible = true
+	else:
+		dot.visible = false
 	for i in 4:
-		var bar: ColorRect = crosshair_parts[i + 1]
+		var bar: ColorRect = parts[i + 1]
 		if i < 2:
 			bar.size = Vector2(bar_w, bar_len)
 			bar.position = Vector2(-bar_w / 2.0, -gap - bar_len) if i == 0 else Vector2(-bar_w / 2.0, gap)
 		else:
 			bar.size = Vector2(bar_len, bar_w)
 			bar.position = Vector2(-gap - bar_len, -bar_w / 2.0) if i == 2 else Vector2(gap, -bar_w / 2.0)
-	for part in crosshair_parts:
-		part.color = crosshair_color
+	for part in parts:
+		part.color = Color(color.r, color.g, color.b, opacity)
 
 func update_hud() -> void:
 	if hud_timer == null:
@@ -1977,6 +2162,10 @@ func update_hud() -> void:
 	hud_kills.text = "击杀 %d" % kills
 	hud_shots.text = ("射击 %d" % int(shots)) if mode != MODE_TRACKING else ("射击 %.1f s" % shots)
 	hud_misses.text = "未中 " + (str(misses) if mode != MODE_TRACKING else "—")
+	if mode != MODE_TRACKING and first_shots > 0:
+		hud_first.text = "首枪 %d%%" % int(round(first_hits / float(first_shots) * 100.0))
+	else:
+		hud_first.text = "首枪 —"
 	var parts := []
 	if triggerbot:
 		parts.append("扳机")
@@ -2011,6 +2200,55 @@ func _record_shot_stats() -> void:
 		best_t["shot_done"] = true
 		reaction_total += maxf(0.0, now - float(best_t["spawn_time"])) * 1000.0
 		reaction_count += 1
+
+# ---------------------------------------------------------------- 准星编辑器（v1.2.0）
+func _open_crosshair_editor() -> void:
+	_sync_crosshair_ui()
+	apply_crosshair()
+	crosshair_screen.visible = true
+
+func _close_crosshair_editor() -> void:
+	crosshair_screen.visible = false
+
+func _reset_crosshair() -> void:
+	crosshair_len = 7.0
+	crosshair_gap = 12.0
+	crosshair_thickness = 2.0
+	crosshair_dot = 0.0
+	crosshair_opacity = 1.0
+	_sync_crosshair_ui()
+	apply_crosshair()
+	_save_config()
+
+func _sync_crosshair_ui() -> void:
+	if ch_sliders.is_empty() or ch_labels.is_empty():
+		return
+	ch_sliders[0].value = crosshair_len
+	ch_sliders[1].value = crosshair_gap
+	ch_sliders[2].value = crosshair_thickness
+	ch_sliders[3].value = crosshair_dot
+	ch_sliders[4].value = crosshair_opacity * 100.0
+	ch_labels[0].text = "%d" % int(crosshair_len)
+	ch_labels[1].text = "%d" % int(crosshair_gap)
+	ch_labels[2].text = "%d" % int(crosshair_thickness)
+	ch_labels[3].text = "关" if crosshair_dot < 0.5 else "%d" % int(crosshair_dot)
+	ch_labels[4].text = "%d%%" % int(round(crosshair_opacity * 100.0))
+
+func _on_ch_slider(v: float, idx: int) -> void:
+	match idx:
+		0:
+			crosshair_len = v
+		1:
+			crosshair_gap = v
+		2:
+			crosshair_thickness = v
+		3:
+			crosshair_dot = v
+		4:
+			crosshair_opacity = v / 100.0
+	_sync_crosshair_ui()
+	apply_crosshair()
+	_save_config()
 
 # ---------------------------------------------------------------- 灵敏度校准（180° 甩动）
 func _open_calibration() -> void:
