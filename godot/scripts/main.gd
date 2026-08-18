@@ -738,7 +738,7 @@ func start_round() -> void:
 	targets.clear()
 	target_bodies.clear()
 	var cfg_mode: Dictionary = MODES[mode]
-	var target_count := maxi(1, int(round(float(cfg_mode["count"]) * count_mult)))
+	var target_count := 1 if mode == MODE_TRACKING else maxi(1, int(round(float(cfg_mode["count"]) * count_mult)))
 	for i in target_count:
 		make_target(cfg_mode["color"])
 	for t in targets:
